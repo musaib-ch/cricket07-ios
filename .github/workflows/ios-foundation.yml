@@ -1,0 +1,29 @@
+name: iOS foundation validation
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Xcode toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+      - name: Compile controller bridge for iOS simulator
+        run: |
+          SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+          xcrun swiftc -target arm64-apple-ios17.0-simulator -sdk "$SDK" -typecheck ios/Cricket07/ControllerBridge.swift
+      - name: Check no bundled game executable
+        run: |
+          if find ios -type f \( -iname '*.exe' -o -iname '*.iso' \) | grep .; then
+            echo "Proprietary game binaries must not be committed"
+            exit 1
+          fi
+      - name: Build status
+        run: echo "Controller foundation checked. Native game runtime and IPA are not implemented."
