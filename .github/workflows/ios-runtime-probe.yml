@@ -1,0 +1,42 @@
+name: iOS ARM64 runtime compile probe
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'runtime/**'
+      - 'ios/**'
+      - '.github/workflows/ios-runtime-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-probe:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [iphoneos, iphonesimulator]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check C runtime for ARM64 iOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKROOT="$(xcrun --sdk "${{ matrix.sdk }}" --show-sdk-path)"
+          if [ "${{ matrix.sdk }}" = "iphoneos" ]; then
+            TARGET=arm64-apple-ios17.0
+          else
+            TARGET=arm64-apple-ios17.0-simulator
+          fi
+          mkdir -p build/ios-probe
+          for src in runtime/runtime.c runtime/interp.c; do
+            echo "::group::Compiling $src for $TARGET"
+            xcrun clang -target "$TARGET" -isysroot "$SDKROOT" \
+              -std=gnu11 -frounding-math -Iruntime -c "$src" \
+              -o "build/ios-probe/$(basename "${src%.c}").o"
+            echo "::endgroup::"
+          done
+          echo "Runtime C translation units compile for $TARGET. This does not link or run the game." >> "$GITHUB_STEP_SUMMARY"
