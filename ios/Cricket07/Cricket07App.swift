@@ -18,8 +18,9 @@ struct FoundationView: View {
     var body: some View {
         VStack(spacing: 18) {
             Text("Cricket 07 • iOS Foundation").font(.title.bold())
-            Text("Native shell only. Game engine and assets are not integrated.")
+            Text("Native runtime linking probe. Game engine execution and assets are not integrated.")
                 .multilineTextAlignment(.center)
+            Text(cricket07_runtime_linked() == 1 ? "C runtime symbol linked" : "C runtime unavailable")
             Text(controllerConnected ? "Controller connected" : "Connect a Bluetooth controller")
             Text("Controller key events received: \(eventCount)")
                 .monospacedDigit()
