@@ -6,4 +6,6 @@ int cricket07_runtime_linked(void);
 int cricket07_runtime_registry_smoke_test(void);
 /// Returns 1 if a 4 GiB + 64 KiB virtual reservation and two page touches succeed.
 int cricket07_guest_memory_probe(void);
+/// Disposable CPU, stack and thread-information-block layout test.
+int cricket07_cpu_stack_probe(void);
 #endif
