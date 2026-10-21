@@ -1,0 +1,25 @@
+name: Native iOS app shell
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths: ['ios/**', '.github/workflows/ios-app-shell.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [iphonesimulator, iphoneos]
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd ios && xcodegen generate --spec project.yml
+      - name: Compile app
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.sdk }}" = "iphoneos" ]; then DEST="generic/platform=iOS"; else DEST="generic/platform=iOS Simulator"; fi
+          xcodebuild -project ios/Cricket07Foundation.xcodeproj -scheme Cricket07Foundation -sdk "${{ matrix.sdk }}" -destination "$DEST" -derivedDataPath "$RUNNER_TEMP/Derived" CODE_SIGNING_ALLOWED=NO build
