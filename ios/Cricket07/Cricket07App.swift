@@ -15,6 +15,7 @@ struct FoundationView: View {
     @State private var controllerConnected = !GCController.controllers().isEmpty
     @State private var eventCount = 0
     @State private var memoryProbeResult = "Not tested"
+    @State private var cpuProbeResult = "Not tested"
     private let bridge = ControllerBridge()
     var body: some View {
         VStack(spacing: 18) {
@@ -30,6 +31,16 @@ struct FoundationView: View {
                     let success = cricket07_guest_memory_probe() == 1
                     await MainActor.run {
                         memoryProbeResult = success ? "Reservation passed" : "Reservation failed"
+                    }
+                }
+            }
+            Text("CPU and stack: \(cpuProbeResult)")
+            Button("Test guest CPU and stack") {
+                cpuProbeResult = "Testing"
+                Task.detached(priority: .utility) {
+                    let success = cricket07_cpu_stack_probe() == 1
+                    await MainActor.run {
+                        cpuProbeResult = success ? "CPU and stack passed" : "CPU and stack failed"
                     }
                 }
             }
