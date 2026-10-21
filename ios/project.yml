@@ -14,8 +14,12 @@ targets:
     platform: iOS
     sources:
       - path: Cricket07
+      - path: ../runtime/runtime.c
+      - path: ../runtime/interp.c
     settings:
       base:
+        SWIFT_OBJC_BRIDGING_HEADER: Cricket07/RuntimeBridge.h
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../runtime"
         PRODUCT_BUNDLE_IDENTIFIER: com.cricket07foundation.app
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
