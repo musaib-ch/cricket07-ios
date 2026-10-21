@@ -21,6 +21,7 @@ struct FoundationView: View {
             Text("Native runtime linking probe. Game engine execution and assets are not integrated.")
                 .multilineTextAlignment(.center)
             Text(cricket07_runtime_linked() == 1 ? "C runtime symbol linked" : "C runtime unavailable")
+            Text(cricket07_runtime_registry_smoke_test() == 1 ? "Runtime registry smoke test passed" : "Runtime registry smoke test failed")
             Text(controllerConnected ? "Controller connected" : "Connect a Bluetooth controller")
             Text("Controller key events received: \(eventCount)")
                 .monospacedDigit()
