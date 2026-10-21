@@ -14,6 +14,7 @@ struct Cricket07FoundationApp: App {
 struct FoundationView: View {
     @State private var controllerConnected = !GCController.controllers().isEmpty
     @State private var eventCount = 0
+    @State private var memoryProbeResult = "Not tested"
     private let bridge = ControllerBridge()
     var body: some View {
         VStack(spacing: 18) {
@@ -22,6 +23,16 @@ struct FoundationView: View {
                 .multilineTextAlignment(.center)
             Text(cricket07_runtime_linked() == 1 ? "C runtime symbol linked" : "C runtime unavailable")
             Text(cricket07_runtime_registry_smoke_test() == 1 ? "Runtime registry smoke test passed" : "Runtime registry smoke test failed")
+            Text("Guest memory: \(memoryProbeResult)")
+            Button("Test guest virtual memory") {
+                memoryProbeResult = "Testing"
+                Task.detached(priority: .utility) {
+                    let success = cricket07_guest_memory_probe() == 1
+                    await MainActor.run {
+                        memoryProbeResult = success ? "Reservation passed" : "Reservation failed"
+                    }
+                }
+            }
             Text(controllerConnected ? "Controller connected" : "Connect a Bluetooth controller")
             Text("Controller key events received: \(eventCount)")
                 .monospacedDigit()
