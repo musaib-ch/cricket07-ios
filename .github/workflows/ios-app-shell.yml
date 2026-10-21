@@ -30,15 +30,21 @@ jobs:
           set -euo pipefail
           APP="$RUNNER_TEMP/Derived/Build/Products/Debug-iphoneos/Cricket07Foundation.app"
           test -d "$APP"
+          # Provide a valid ad-hoc Mach-O signature for tools that subsequently
+          # replace it with a development-team signature (for example AltStore).
+          # This is NOT an installable Apple provisioning signature.
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
-          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cricket07Foundation-diagnostics-unsigned.ipa" Payload)
-          echo "Unsigned diagnostics only: sign with a valid iOS provisioning identity before sideloading. No Cricket 07 gameplay." >> "$GITHUB_STEP_SUMMARY"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cricket07Foundation-diagnostics-adhoc.ipa" Payload)
+          echo "Ad-hoc signed diagnostics only: AltStore must re-sign with a valid development identity. No Cricket 07 gameplay." >> "$GITHUB_STEP_SUMMARY"
       - name: Upload diagnostic IPA
         if: matrix.sdk == 'iphoneos'
         uses: actions/upload-artifact@v4
         with:
-          name: Cricket07Foundation-diagnostics-unsigned
-          path: Cricket07Foundation-diagnostics-unsigned.ipa
+          name: Cricket07Foundation-diagnostics-adhoc
+          path: Cricket07Foundation-diagnostics-adhoc.ipa
           if-no-files-found: error
           retention-days: 14
