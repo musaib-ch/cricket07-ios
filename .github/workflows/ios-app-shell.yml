@@ -23,3 +23,22 @@ jobs:
           set -euo pipefail
           if [ "${{ matrix.sdk }}" = "iphoneos" ]; then DEST="generic/platform=iOS"; else DEST="generic/platform=iOS Simulator"; fi
           xcodebuild -project ios/Cricket07Foundation.xcodeproj -scheme Cricket07Foundation -sdk "${{ matrix.sdk }}" -destination "$DEST" -derivedDataPath "$RUNNER_TEMP/Derived" CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned diagnostic IPA
+        if: matrix.sdk == 'iphoneos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Derived/Build/Products/Debug-iphoneos/Cricket07Foundation.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/Cricket07Foundation-diagnostics-unsigned.ipa" Payload)
+          echo "Unsigned diagnostics only: sign with a valid iOS provisioning identity before sideloading. No Cricket 07 gameplay." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload diagnostic IPA
+        if: matrix.sdk == 'iphoneos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cricket07Foundation-diagnostics-unsigned
+          path: Cricket07Foundation-diagnostics-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
