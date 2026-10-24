@@ -1,0 +1,73 @@
+name: Cricket 07 iOS engine static library
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'runtime/**'
+      - 'host/**'
+      - '.github/workflows/ios-engine-library.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine-library:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [iphoneos, iphonesimulator]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native runtime and compatible host objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${{ matrix.sdk }}"
+          SDKROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
+          if [ "$SDK" = iphoneos ]; then
+            TARGET=arm64-apple-ios17.0
+          else
+            TARGET=arm64-apple-ios17.0-simulator
+          fi
+          OUT="$RUNNER_TEMP/engine-$SDK"
+          mkdir -p "$OUT/objects"
+          SOURCES=(
+            runtime/runtime.c runtime/interp.c
+            host/com.c host/core.c host/d3d8.c host/dinput.c host/dsound.c
+            host/input.c host/kernel32.c host/main.c host/misc.c host/pshader.c
+            host/render_rec.c host/texconv.c host/user32.c host/vshader.c
+            host/watch.c host/web.c
+          )
+          for src in "${SOURCES[@]}"; do
+            object="$OUT/objects/${src//\//_}.o"
+            echo "::group::Compiling $src"
+            xcrun clang -target "$TARGET" -isysroot "$SDKROOT" \
+              -std=gnu11 -O1 -frounding-math -Wno-unused-function \
+              -Iruntime -Ihost -c "$src" -o "$object"
+            echo "::endgroup::"
+            xcrun lipo -info "$object"
+          done
+          xcrun libtool -static -o "$OUT/libcricket07host.a" "$OUT"/objects/*.o
+          xcrun lipo -info "$OUT/libcricket07host.a"
+          xcrun ar -t "$OUT/libcricket07host.a" > "$OUT/objects.txt"
+          cp "$OUT/libcricket07host.a" "libcricket07host-$SDK.a"
+          cp "$OUT/objects.txt" "libcricket07host-$SDK-objects.txt"
+          {
+            echo "## Native engine static archive ($SDK)"
+            echo "Compiled ${#SOURCES[@]} C translation units for $TARGET."
+            echo "Archive: libcricket07host-$SDK.a"
+            echo
+            echo "This is an unlinked intermediate library, NOT a playable engine or IPA."
+            echo "Still missing: generated Cricket 07 game functions, iOS Metal/wgpu rendering, iOS window integration, game assets, and final app linkage."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cricket07-engine-library-${{ matrix.sdk }}
+          path: |
+            libcricket07host-${{ matrix.sdk }}.a
+            libcricket07host-${{ matrix.sdk }}-objects.txt
+          if-no-files-found: error
+          retention-days: 14
