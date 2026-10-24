@@ -13,4 +13,7 @@ int cricket07_cpu_stack_probe(void);
 int cricket07_decode_clear_rgba(const void *bytes, size_t length, float *rgba, size_t count);
 /// Deterministic graphics command smoke test, not the live game renderer.
 int cricket07_sample_clear_rgba(float *rgba, size_t count);
+/// Decode an aligned TARGET/CLEAR/PRESENT command sequence; returns 0 for unsupported draw commands.
+int cricket07_decode_frame_stream(const void *bytes, size_t length, float *rgba, size_t count, unsigned int *frame_number);
+int cricket07_sample_frame_stream(float *rgba, size_t count, unsigned int *frame_number);
 #endif
