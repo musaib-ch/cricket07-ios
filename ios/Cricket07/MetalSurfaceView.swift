@@ -36,6 +36,7 @@ struct MetalSurfaceView: UIViewRepresentable {
 
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
+        private var testPipeline: MTLRenderPipelineState?
         private var hasPresented = false
         private var consumedGeneration: UInt64 = 0
         private let status: Binding<String>
@@ -48,6 +49,15 @@ struct MetalSurfaceView: UIViewRepresentable {
                 return
             }
             self.queue = queue
+            if let library = device.makeDefaultLibrary(),
+               let vertex = library.makeFunction(name: "cricket07_test_vertex"),
+               let fragment = library.makeFunction(name: "cricket07_test_fragment") {
+                let descriptor = MTLRenderPipelineDescriptor()
+                descriptor.vertexFunction = vertex
+                descriptor.fragmentFunction = fragment
+                descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
+                testPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
+            }
             // Synthetic frame exercises producer -> mailbox -> Metal consumer.
             // Real game-thread producer integration remains outstanding.
             let submitted = cricket07_submit_test_frame() == 1
@@ -70,6 +80,10 @@ struct MetalSurfaceView: UIViewRepresentable {
                   let command = queue?.makeCommandBuffer(),
                   let encoder = command.makeRenderCommandEncoder(descriptor: descriptor) else {
                 return
+            }
+            if let testPipeline {
+                encoder.setRenderPipelineState(testPipeline)
+                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             }
             encoder.endEncoding()
             command.present(drawable)
