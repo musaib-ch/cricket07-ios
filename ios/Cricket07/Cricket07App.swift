@@ -44,6 +44,7 @@ struct FoundationView: View {
                     }
                 }
             }
+            GameFilesImportView()
             Text(controllerConnected ? "Controller connected" : "Connect a Bluetooth controller")
             Text("Controller key events received: \(eventCount)")
                 .monospacedDigit()
