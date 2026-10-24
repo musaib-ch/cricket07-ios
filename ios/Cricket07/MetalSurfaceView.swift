@@ -1,9 +1,8 @@
 import SwiftUI
 import MetalKit
 
-/// An iOS-native Metal surface smoke test.
-/// Rendering a solid color proves device/surface/command-buffer presentation;
-/// it DOES NOT render the Cricket 07 engine.
+/// Diagnostic Metal consumer for a synthetic CLEAR/DRAW/PRESENT frame.
+/// No real game graphics or engine execution is implemented here.
 struct MetalSurfaceView: UIViewRepresentable {
     @Binding var status: String
 
@@ -38,8 +37,8 @@ struct MetalSurfaceView: UIViewRepresentable {
         private var queue: MTLCommandQueue?
         private var testPipeline: MTLRenderPipelineState?
         private var stagedVertices: MTLBuffer?
-        private var hasPresented = false
-        private var consumedGeneration: UInt64 = 0
+        private var stagedVertexCount = 0
+        private var hasReceivedDraw = false
         private let status: Binding<String>
 
         init(status: Binding<String>) { self.status = status }
@@ -59,21 +58,12 @@ struct MetalSurfaceView: UIViewRepresentable {
                 descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
                 testPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
             }
-            var positions = [Float](repeating: 0, count: 12)
-            var count = 0
-            let extracted = positions.withUnsafeMutableBufferPointer { buffer in
-                cricket07_sample_draw_vertices(buffer.baseAddress, buffer.count, &count) == 1
-            }
-            if extracted && count == 3 {
-                stagedVertices = positions.withUnsafeBytes { bytes in
-                    guard let base = bytes.baseAddress else { return nil }
-                    return device.makeBuffer(bytes: base, length: bytes.count, options: [])
-                }
-            }
-            // Synthetic frame exercises producer -> mailbox -> Metal consumer.
-            // Real game-thread producer integration remains outstanding.
-            let submitted = cricket07_submit_test_frame() == 1
-            status.wrappedValue = submitted ? "Metal initialized; test frame queued" : "Metal initialized; frame test failed"
+            // Queue a complete synthetic draw frame. Only the supported
+            // diagnostic command subset is consumed by this Metal view.
+            let submitted = cricket07_submit_test_triangle_frame() == 1
+            status.wrappedValue = submitted
+                ? "Metal initialized; diagnostic draw frame queued"
+                : "Metal initialized; diagnostic draw frame failed"
         }
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -95,21 +85,23 @@ struct MetalSurfaceView: UIViewRepresentable {
                 if found && count > 0 {
                     let required = count * 4
                     let active = Array(vertices.prefix(required))
-                    stagedVertices = active.withUnsafeBytes { bytes in
+                    let buffer = active.withUnsafeBytes { bytes -> MTLBuffer? in
                         guard let base = bytes.baseAddress else { return nil }
                         return device.makeBuffer(bytes: base, length: bytes.count, options: [])
                     }
-                    view.clearColor = MTLClearColor(red: Double(color[0]), green: Double(color[1]),
-                                                  blue: Double(color[2]), alpha: Double(color[3]))
+                    if let buffer {
+                        stagedVertices = buffer
+                        stagedVertexCount = count
+                        view.clearColor = MTLClearColor(red: Double(color[0]), green: Double(color[1]),
+                                                      blue: Double(color[2]), alpha: Double(color[3]))
+                        if !hasReceivedDraw {
+                            hasReceivedDraw = true
+                            DispatchQueue.main.async { [weak self] in
+                                self?.status.wrappedValue = "Diagnostic CMD_DRAW decoded; Metal buffer ready"
+                            }
+                        }
+                    }
                 }
-            }
-            var channels = [Float](repeating: 0, count: 4)
-            var frameNumber: UInt32 = 0
-            let received = channels.withUnsafeMutableBufferPointer { buffer in
-                cricket07_take_frame(buffer.baseAddress, buffer.count, &frameNumber, &consumedGeneration) == 1
-            }
-            if received {
-                view.clearColor = MTLClearColor(red: Double(channels[0]), green: Double(channels[1]), blue: Double(channels[2]), alpha: Double(channels[3]))
             }
             guard let drawable = view.currentDrawable,
                   let descriptor = view.currentRenderPassDescriptor,
@@ -117,20 +109,14 @@ struct MetalSurfaceView: UIViewRepresentable {
                   let encoder = command.makeRenderCommandEncoder(descriptor: descriptor) else {
                 return
             }
-            if let testPipeline, let stagedVertices {
+            if let testPipeline, let stagedVertices, stagedVertexCount > 0 {
                 encoder.setRenderPipelineState(testPipeline)
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
-                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: stagedVertexCount)
             }
             encoder.endEncoding()
             command.present(drawable)
             command.commit()
-            if !hasPresented {
-                hasPresented = true
-                DispatchQueue.main.async { [weak self] in
-                    self?.status.wrappedValue = "Metal frame submitted"
-                }
-            }
         }
     }
 }
