@@ -69,3 +69,45 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
     *frame_number = frame;
     return 1;
 }
+
+
+/* Synthetic complete command stream, exercising the same mailbox and
+ * CMD_DRAW parser that the iOS Metal consumer uses. This is NOT game data.
+ * Keep this producer isolated from the actual engine until supported
+ * render states, transforms, and textures are implemented.
+ */
+int cricket07_submit_test_triangle_frame(void) {
+    const size_t draw_size = (sizeof(CmdDraw) + 3u * sizeof(CVert) + 7u) & ~(size_t)7u;
+    unsigned char bytes[sizeof(CmdClear) + sizeof(CmdDraw) + 3u * sizeof(CVert)
+                        + 8u + sizeof(CmdPresent)] = {0};
+    CmdClear clear = {0};
+    clear.h.type = CMD_CLEAR;
+    clear.h.size = (uint32_t)sizeof(clear);
+    clear.flags = 1u;
+    clear.color = 0xFF166078u;
+
+    CmdDraw draw = {0};
+    draw.h.type = CMD_DRAW;
+    draw.h.size = (uint32_t)draw_size;
+    draw.key.topo = 4u;  /* WGPU triangle-list topology */
+    draw.nverts = 3u;
+    CVert vertices[3] = {0};
+    vertices[0].x = -0.7f; vertices[0].y = -0.55f; vertices[0].w = 1.0f;
+    vertices[1].x =  0.7f; vertices[1].y = -0.55f; vertices[1].w = 1.0f;
+    vertices[2].x =  0.0f; vertices[2].y =  0.7f;  vertices[2].w = 1.0f;
+
+    CmdPresent present = {0};
+    present.h.type = CMD_PRESENT;
+    present.h.size = (uint32_t)sizeof(present);
+    present.frame = 7u;
+
+    size_t offset = 0;
+    memcpy(bytes + offset, &clear, sizeof(clear));
+    offset += sizeof(clear);
+    memcpy(bytes + offset, &draw, sizeof(draw));
+    memcpy(bytes + offset + sizeof(draw), vertices, sizeof(vertices));
+    offset += draw_size;
+    memcpy(bytes + offset, &present, sizeof(present));
+    offset += sizeof(present);
+    return cricket07_frame_queue_publish(bytes, offset);
+}
