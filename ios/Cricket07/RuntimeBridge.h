@@ -26,4 +26,6 @@ int cricket07_submit_test_frame(void);
 int cricket07_sample_draw_vertices(float *xyzw, size_t capacity, size_t *count);
 /// Consume one strictly supported raw DRAW frame from the native queue, not a complete renderer.
 int cricket07_take_triangle_frame(float *rgba, size_t color_capacity, float *xyzw, size_t vertex_float_capacity, size_t *vertex_count, unsigned int *frame_number);
+/// Publish one synthetic CLEAR/DRAW/PRESENT frame through the actual native mailbox.
+int cricket07_submit_test_triangle_frame(void);
 #endif
