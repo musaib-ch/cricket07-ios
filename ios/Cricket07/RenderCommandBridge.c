@@ -1,6 +1,7 @@
 #include "RuntimeBridge.h"
 #include "render_cmd.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* First iOS adapter for the renderer's existing Direct3D command stream.
  * Safe bounded decoding of CMD_CLEAR; not yet a full command queue/executor.
