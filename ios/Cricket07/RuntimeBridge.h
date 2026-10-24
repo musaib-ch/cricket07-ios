@@ -24,4 +24,6 @@ int cricket07_take_frame(float *rgba, size_t count, unsigned int *frame_number, 
 int cricket07_submit_test_frame(void);
 /// Synthetic Direct3D CMD_DRAW passed through bounded staging, no live game.
 int cricket07_sample_draw_vertices(float *xyzw, size_t capacity, size_t *count);
+/// Consume one strictly supported raw DRAW frame from the native queue, not a complete renderer.
+int cricket07_take_triangle_frame(float *rgba, size_t color_capacity, float *xyzw, size_t vertex_float_capacity, size_t *vertex_count, unsigned int *frame_number);
 #endif
