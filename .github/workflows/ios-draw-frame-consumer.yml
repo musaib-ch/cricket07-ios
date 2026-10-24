@@ -1,0 +1,40 @@
+name: iOS draw frame consumer regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/DrawFrameConsumer.c'
+      - 'ios/Cricket07/TriangleStaging.c'
+      - 'ios/Cricket07/FrameQueue.c'
+      - 'ios/Cricket07/RuntimeBridge.h'
+      - 'tests/ios_draw_frame_consumer_test.c'
+      - '.github/workflows/ios-draw-frame-consumer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and execute producer-to-consumer tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/DrawFrameConsumer.c \
+            ios/Cricket07/TriangleStaging.c ios/Cricket07/FrameQueue.c \
+            tests/ios_draw_frame_consumer_test.c \
+            -o "$RUNNER_TEMP/draw-frame-tests"
+          "$RUNNER_TEMP/draw-frame-tests"
+      - name: Cross compile draw consumer for iPhone ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          for file in DrawFrameConsumer TriangleStaging FrameQueue; do
+            xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
+              -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+              -c "ios/Cricket07/$file.c" -o "$RUNNER_TEMP/$file.o"
+          done
+          echo "Synthetic complete draw frame decoded; no game engine or assets included." >> "$GITHUB_STEP_SUMMARY"
