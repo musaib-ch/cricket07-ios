@@ -1,0 +1,35 @@
+name: iOS graphics bridge regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/RenderCommandBridge.c'
+      - 'ios/Cricket07/RuntimeBridge.h'
+      - 'host/render_cmd.h'
+      - 'tests/ios_render_bridge_test.c'
+      - '.github/workflows/ios-graphics-bridge-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and execute graphics bridge tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/RenderCommandBridge.c tests/ios_render_bridge_test.c \
+            -o "$RUNNER_TEMP/bridge-tests"
+          "$RUNNER_TEMP/bridge-tests"
+      - name: Cross-compile graphics bridge for physical iPhone
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
+            -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            -c ios/Cricket07/RenderCommandBridge.c -o "$RUNNER_TEMP/RenderCommandBridge.o"
+          xcrun lipo -info "$RUNNER_TEMP/RenderCommandBridge.o"
