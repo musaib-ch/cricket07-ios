@@ -16,6 +16,7 @@ struct FoundationView: View {
     @State private var eventCount = 0
     @State private var memoryProbeResult = "Not tested"
     @State private var cpuProbeResult = "Not tested"
+    @State private var metalStatus = "Not initialized"
     private let bridge = ControllerBridge()
     var body: some View {
         VStack(spacing: 18) {
@@ -44,6 +45,10 @@ struct FoundationView: View {
                     }
                 }
             }
+            Text("Metal renderer: \(metalStatus)")
+            MetalSurfaceView(status: $metalStatus)
+                .frame(height: 100)
+                .cornerRadius(10)
             GameFilesImportView()
             Text(controllerConnected ? "Controller connected" : "Connect a Bluetooth controller")
             Text("Controller key events received: \(eventCount)")
