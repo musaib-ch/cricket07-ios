@@ -1,0 +1,30 @@
+name: iOS frame transport tests
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/FrameQueue.*'
+      - 'tests/ios_frame_queue_test.c'
+      - '.github/workflows/ios-frame-transport-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transport:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run native frame transport regression tests
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -pthread -Iios/Cricket07 \
+            ios/Cricket07/FrameQueue.c tests/ios_frame_queue_test.c \
+            -o "$RUNNER_TEMP/frame-queue-test"
+          "$RUNNER_TEMP/frame-queue-test"
+      - name: Compile transport for real iOS hardware
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" \
+            -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -c \
+            ios/Cricket07/FrameQueue.c -o "$RUNNER_TEMP/FrameQueue.o"
