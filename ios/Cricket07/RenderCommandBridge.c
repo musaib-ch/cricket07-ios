@@ -92,44 +92,35 @@ int cricket07_sample_frame_stream(float *rgba, size_t count, unsigned int *frame
     return cricket07_decode_frame_stream(&stream, sizeof(stream), rgba, count, frame_number);
 }
 
-/* Thread-safe latest-frame mailbox for native game-thread -> Metal main-thread
- * transfer. Only simple clear/present frames are accepted at this stage.
- * Never pass pointers into producer-owned memory to the consumer. */
+/* Producer publishes a bounded copy of an entire validated frame.
+ * Consumer atomically takes it and decodes on the render thread.
+ * This supersedes the old decoded-color mailbox. */
+#include "FrameQueue.h"
 #include <pthread.h>
-static pthread_mutex_t g_frame_lock = PTHREAD_MUTEX_INITIALIZER;
-static float g_latest_color[4];
-static unsigned int g_latest_frame;
-static unsigned long long g_frame_generation;
-static int g_frame_available;
+static pthread_mutex_t g_consumer_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned long long g_consumed_generation;
 
 int cricket07_submit_frame(const void *bytes, size_t length) {
     float color[4];
     unsigned int frame;
     if (!cricket07_decode_frame_stream(bytes, length, color, 4, &frame)) return 0;
-    pthread_mutex_lock(&g_frame_lock);
-    memcpy(g_latest_color, color, sizeof(color));
-    g_latest_frame = frame;
-    g_frame_generation++;
-    g_frame_available = 1;
-    pthread_mutex_unlock(&g_frame_lock);
-    return 1;
+    return cricket07_frame_queue_publish(bytes, length);
 }
 
 int cricket07_take_frame(float *rgba, size_t count, unsigned int *frame_number,
                          unsigned long long *generation) {
     if (!rgba || count < 4 || !frame_number || !generation) return 0;
-    pthread_mutex_lock(&g_frame_lock);
-    int new_frame = g_frame_available && g_frame_generation != *generation;
-    if (new_frame) {
-        memcpy(rgba, g_latest_color, sizeof(g_latest_color));
-        *frame_number = g_latest_frame;
-        *generation = g_frame_generation;
-    }
-    pthread_mutex_unlock(&g_frame_lock);
-    return new_frame;
+    unsigned char *buffer = malloc(16u * 1024u * 1024u);
+    if (!buffer) return 0;
+    pthread_mutex_lock(&g_consumer_lock);
+    size_t length = cricket07_frame_queue_take(buffer, 16u * 1024u * 1024u);
+    int ok = length != 0 && cricket07_decode_frame_stream(buffer, length, rgba, count, frame_number);
+    if (ok) *generation = ++g_consumed_generation;
+    pthread_mutex_unlock(&g_consumer_lock);
+    free(buffer);
+    return ok;
 }
 
-/* Deterministic producer test; does not imply the real game is linked. */
 int cricket07_submit_test_frame(void) {
     struct { CmdClear clear; CmdPresent present; } sample;
     memset(&sample, 0, sizeof(sample));
