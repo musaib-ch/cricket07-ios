@@ -37,6 +37,7 @@ struct MetalSurfaceView: UIViewRepresentable {
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
         private var testPipeline: MTLRenderPipelineState?
+        private var stagedVertices: MTLBuffer?
         private var hasPresented = false
         private var consumedGeneration: UInt64 = 0
         private let status: Binding<String>
@@ -50,13 +51,24 @@ struct MetalSurfaceView: UIViewRepresentable {
             }
             self.queue = queue
             if let library = device.makeDefaultLibrary(),
-               let vertex = library.makeFunction(name: "cricket07_test_vertex"),
+               let vertex = library.makeFunction(name: "cricket07_staged_vertex"),
                let fragment = library.makeFunction(name: "cricket07_test_fragment") {
                 let descriptor = MTLRenderPipelineDescriptor()
                 descriptor.vertexFunction = vertex
                 descriptor.fragmentFunction = fragment
                 descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
                 testPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
+            }
+            var positions = [Float](repeating: 0, count: 12)
+            var count = 0
+            let extracted = positions.withUnsafeMutableBufferPointer { buffer in
+                cricket07_sample_draw_vertices(buffer.baseAddress, buffer.count, &count) == 1
+            }
+            if extracted && count == 3 {
+                stagedVertices = positions.withUnsafeBytes { bytes in
+                    guard let base = bytes.baseAddress else { return nil }
+                    return device.makeBuffer(bytes: base, length: bytes.count, options: [])
+                }
             }
             // Synthetic frame exercises producer -> mailbox -> Metal consumer.
             // Real game-thread producer integration remains outstanding.
@@ -81,8 +93,9 @@ struct MetalSurfaceView: UIViewRepresentable {
                   let encoder = command.makeRenderCommandEncoder(descriptor: descriptor) else {
                 return
             }
-            if let testPipeline {
+            if let testPipeline, let stagedVertices {
                 encoder.setRenderPipelineState(testPipeline)
+                encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
                 encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             }
             encoder.endEncoding()
