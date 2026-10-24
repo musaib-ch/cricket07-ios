@@ -14,7 +14,15 @@ struct MetalSurfaceView: UIViewRepresentable {
         view.device = MTLCreateSystemDefaultDevice()
         view.colorPixelFormat = .bgra8Unorm
         view.framebufferOnly = true
-        view.clearColor = MTLClearColor(red: 0.06, green: 0.14, blue: 0.19, alpha: 1)
+        var channels = [Float](repeating: 0, count: 4)
+        let decoded = channels.withUnsafeMutableBufferPointer { buffer in
+            cricket07_sample_clear_rgba(buffer.baseAddress, buffer.count) == 1
+        }
+        if decoded {
+            view.clearColor = MTLClearColor(red: Double(channels[0]), green: Double(channels[1]), blue: Double(channels[2]), alpha: Double(channels[3]))
+        } else {
+            view.clearColor = MTLClearColor(red: 0.06, green: 0.14, blue: 0.19, alpha: 1)
+        }
         view.preferredFramesPerSecond = 30
         view.isPaused = false
         view.enableSetNeedsDisplay = false
