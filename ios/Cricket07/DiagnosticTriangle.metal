@@ -17,3 +17,14 @@ vertex TriangleVertex cricket07_test_vertex(uint id [[vertex_id]]) {
 fragment float4 cricket07_test_fragment(TriangleVertex in [[stage_in]]) {
     return in.color;
 }
+
+struct StagedVertex { float4 position; };
+vertex TriangleVertex cricket07_staged_vertex(const device StagedVertex *vertices [[buffer(0)]],
+                                             uint id [[vertex_id]]) {
+    TriangleVertex out;
+    out.position = vertices[id].position;
+    out.color = float4(0.2 + float(id == 0) * 0.8,
+                       0.2 + float(id == 1) * 0.8,
+                       0.2 + float(id == 2) * 0.8, 1.0);
+    return out;
+}
