@@ -1,0 +1,83 @@
+name: iOS native engine port audit
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'runtime/**'
+      - 'host/**'
+      - 'ios/**'
+      - '.github/workflows/ios-native-engine-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [iphoneos, iphonesimulator]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit native C engine against Apple iOS SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${{ matrix.sdk }}"
+          ROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
+          if [ "$SDK" = iphoneos ]; then TARGET=arm64-apple-ios17.0; else TARGET=arm64-apple-ios17.0-simulator; fi
+          mkdir -p "port-audit/$SDK"
+          LOG="port-audit/$SDK/report.txt"
+          {
+            echo "Cricket 07 native port feasibility report"
+            echo "SDK: $SDK"
+            echo "Target: $TARGET"
+            echo "NOTE: Native source compilation is not a playable game."
+            echo "Game translation output and legal user-provided assets are not in this repo."
+            echo
+          } > "$LOG"
+
+          # Compiling core runtime is a required baseline. Do not hide failures.
+          for src in runtime/runtime.c runtime/interp.c; do
+            echo "=== $src (required) ===" | tee -a "$LOG"
+            if xcrun clang -target "$TARGET" -isysroot "$ROOT" -std=gnu11               -frounding-math -Iruntime -c "$src"               -o "port-audit/$SDK/$(basename "${src%.c}").o" >>"$LOG" 2>&1; then
+              echo "PASS $src" | tee -a "$LOG"
+            else
+              echo "FAIL $src" | tee -a "$LOG"
+              exit 1
+            fi
+          done
+
+          # Probe host compatibility. Many files require SDL2 and wgpu-native,
+          # neither of which is available as an iOS build in this repository.
+          # Report blockers without mistaking incomplete dependencies for success.
+          for src in host/*.c; do
+            echo "=== $src (exploratory) ===" >> "$LOG"
+            if xcrun clang -target "$TARGET" -isysroot "$ROOT" -std=gnu11               -fsyntax-only -Wno-unused-function -Iruntime -Ihost "$src"               >> "$LOG" 2>&1; then
+              echo "PASS $src" | tee -a "$LOG"
+            else
+              echo "BLOCKED $src" | tee -a "$LOG"
+            fi
+          done
+
+          {
+            echo "## $SDK native-port audit"
+            echo
+            echo "Core runtime: required compile stage passed."
+            echo "Host translation units:"
+            grep -E '^(PASS|BLOCKED) host/' "$LOG" | sed 's/^/- /'
+            echo
+            echo "Blockers are recorded in the uploaded report. This job does not build gameplay or package an IPA."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-native-port-audit-${{ matrix.sdk }}
+          path: port-audit/${{ matrix.sdk }}/report.txt
+          if-no-files-found: warn
+          retention-days: 14
