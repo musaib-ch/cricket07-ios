@@ -5,10 +5,10 @@
 #include <string.h>
 #include <stdint.h>
 int main(void) {
-    struct { CmdDraw header; CVert vertices[3]; } cmd;
+    struct { CmdDraw header; CVert vertices[3]; unsigned char padding[8]; } cmd;
     memset(&cmd, 0, sizeof(cmd));
     cmd.header.h.type = CMD_DRAW;
-    cmd.header.h.size = sizeof(cmd);
+    cmd.header.h.size = (uint32_t)((sizeof(cmd) + 7u) & ~7u);
     cmd.header.key.topo = 4;
     cmd.header.nverts = 3;
     cmd.vertices[0].x = -1.0f;
