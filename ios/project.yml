@@ -19,7 +19,7 @@ targets:
     settings:
       base:
         SWIFT_OBJC_BRIDGING_HEADER: Cricket07/RuntimeBridge.h
-        HEADER_SEARCH_PATHS: "$(SRCROOT)/../runtime"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../runtime $(SRCROOT)/../host"
         PRODUCT_BUNDLE_IDENTIFIER: com.cricket07foundation.app
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
