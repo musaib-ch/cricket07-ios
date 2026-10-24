@@ -1,0 +1,30 @@
+name: iOS triangle command staging
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/TriangleStaging.*'
+      - 'tests/ios_triangle_staging_test.c'
+      - '.github/workflows/ios-triangle-staging.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run native triangle staging tests
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/TriangleStaging.c tests/ios_triangle_staging_test.c \
+            -o "$RUNNER_TEMP/triangles"
+          "$RUNNER_TEMP/triangles"
+      - name: Cross compile triangle staging for iPhone
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
+            -Wall -Wextra -Werror -Ihost -Iios/Cricket07 \
+            -c ios/Cricket07/TriangleStaging.c -o "$RUNNER_TEMP/TriangleStaging.o"
