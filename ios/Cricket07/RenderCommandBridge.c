@@ -26,3 +26,68 @@ int cricket07_sample_clear_rgba(float *rgba, size_t count) {
     cmd.color = 0xFF166078u;
     return cricket07_decode_clear_rgba(&cmd, sizeof(cmd), rgba, count);
 }
+
+/* Decode a complete bounded native command stream. This is the first
+ * host-to-Metal transport boundary. Until the game producer is wired up,
+ * only TARGET, CLEAR and PRESENT are accepted; reject anything else rather
+ * than silently displaying an incomplete game frame.
+ */
+int cricket07_decode_frame_stream(const void *bytes, size_t length,
+                                  float *rgba, size_t count,
+                                  unsigned int *frame_number) {
+    if (!bytes || !rgba || !frame_number || count < 4 || length == 0 ||
+        length > 16u * 1024u * 1024u) return 0;
+    size_t offset = 0;
+    int cleared = 0, presented = 0;
+    float color[4] = {0, 0, 0, 1};
+    unsigned int frame = 0;
+    while (offset < length) {
+        if (length - offset < sizeof(CmdHdr)) return 0;
+        CmdHdr header;
+        memcpy(&header, (const unsigned char *)bytes + offset, sizeof(header));
+        if (header.size < sizeof(CmdHdr) || (header.size & 7u) ||
+            header.size > length - offset || presented) return 0;
+        const unsigned char *current = (const unsigned char *)bytes + offset;
+        switch (header.type) {
+        case CMD_TARGET: {
+            if (header.size < sizeof(CmdTarget)) return 0;
+            CmdTarget target;
+            memcpy(&target, current, sizeof(target));
+            if (target.color_id != 0) return 0; /* backbuffer only */
+            break;
+        }
+        case CMD_CLEAR:
+            if (!cricket07_decode_clear_rgba(current, header.size, color, 4)) return 0;
+            cleared = 1;
+            break;
+        case CMD_PRESENT: {
+            if (header.size < sizeof(CmdPresent) || !cleared) return 0;
+            CmdPresent present;
+            memcpy(&present, current, sizeof(present));
+            frame = present.frame;
+            presented = 1;
+            break;
+        }
+        default:
+            return 0; /* draw/texture/shader support is not yet implemented */
+        }
+        offset += header.size;
+    }
+    if (!presented) return 0;
+    memcpy(rgba, color, sizeof(color));
+    *frame_number = frame;
+    return 1;
+}
+
+int cricket07_sample_frame_stream(float *rgba, size_t count, unsigned int *frame_number) {
+    struct { CmdClear clear; CmdPresent present; } stream;
+    memset(&stream, 0, sizeof(stream));
+    stream.clear.h.type = CMD_CLEAR;
+    stream.clear.h.size = sizeof(CmdClear);
+    stream.clear.flags = 1u;
+    stream.clear.color = 0xFF166078u;
+    stream.present.h.type = CMD_PRESENT;
+    stream.present.h.size = sizeof(CmdPresent);
+    stream.present.frame = 7;
+    return cricket07_decode_frame_stream(&stream, sizeof(stream), rgba, count, frame_number);
+}
