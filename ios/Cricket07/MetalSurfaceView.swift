@@ -79,6 +79,30 @@ struct MetalSurfaceView: UIViewRepresentable {
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
         func draw(in view: MTKView) {
+            // Prefer a queued supported CMD_DRAW frame. The real game producer
+            // is still not linked; diagnostic sample geometry is the fallback.
+            if let device = view.device {
+                var color = [Float](repeating: 0, count: 4)
+                var vertices = [Float](repeating: 0, count: 4096)
+                var count = 0
+                var frame: UInt32 = 0
+                let found = color.withUnsafeMutableBufferPointer { c in
+                    vertices.withUnsafeMutableBufferPointer { v in
+                        cricket07_take_triangle_frame(c.baseAddress, c.count,
+                                                      v.baseAddress, v.count, &count, &frame) == 1
+                    }
+                }
+                if found && count > 0 {
+                    let required = count * 4
+                    let active = Array(vertices.prefix(required))
+                    stagedVertices = active.withUnsafeBytes { bytes in
+                        guard let base = bytes.baseAddress else { return nil }
+                        return device.makeBuffer(bytes: base, length: bytes.count, options: [])
+                    }
+                    view.clearColor = MTLClearColor(red: Double(color[0]), green: Double(color[1]),
+                                                  blue: Double(color[2]), alpha: Double(color[3]))
+                }
+            }
             var channels = [Float](repeating: 0, count: 4)
             var frameNumber: UInt32 = 0
             let received = channels.withUnsafeMutableBufferPointer { buffer in
