@@ -37,6 +37,7 @@ struct MetalSurfaceView: UIViewRepresentable {
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
         private var hasPresented = false
+        private var consumedGeneration: UInt64 = 0
         private let status: Binding<String>
 
         init(status: Binding<String>) { self.status = status }
@@ -47,12 +48,23 @@ struct MetalSurfaceView: UIViewRepresentable {
                 return
             }
             self.queue = queue
-            status.wrappedValue = "Metal initialized"
+            // Synthetic frame exercises producer -> mailbox -> Metal consumer.
+            // Real game-thread producer integration remains outstanding.
+            let submitted = cricket07_submit_test_frame() == 1
+            status.wrappedValue = submitted ? "Metal initialized; test frame queued" : "Metal initialized; frame test failed"
         }
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
         func draw(in view: MTKView) {
+            var channels = [Float](repeating: 0, count: 4)
+            var frameNumber: UInt32 = 0
+            let received = channels.withUnsafeMutableBufferPointer { buffer in
+                cricket07_take_frame(buffer.baseAddress, buffer.count, &frameNumber, &consumedGeneration) == 1
+            }
+            if received {
+                view.clearColor = MTLClearColor(red: Double(channels[0]), green: Double(channels[1]), blue: Double(channels[2]), alpha: Double(channels[3]))
+            }
             guard let drawable = view.currentDrawable,
                   let descriptor = view.currentRenderPassDescriptor,
                   let command = queue?.makeCommandBuffer(),
