@@ -91,3 +91,54 @@ int cricket07_sample_frame_stream(float *rgba, size_t count, unsigned int *frame
     stream.present.frame = 7;
     return cricket07_decode_frame_stream(&stream, sizeof(stream), rgba, count, frame_number);
 }
+
+/* Thread-safe latest-frame mailbox for native game-thread -> Metal main-thread
+ * transfer. Only simple clear/present frames are accepted at this stage.
+ * Never pass pointers into producer-owned memory to the consumer. */
+#include <pthread.h>
+static pthread_mutex_t g_frame_lock = PTHREAD_MUTEX_INITIALIZER;
+static float g_latest_color[4];
+static unsigned int g_latest_frame;
+static unsigned long long g_frame_generation;
+static int g_frame_available;
+
+int cricket07_submit_frame(const void *bytes, size_t length) {
+    float color[4];
+    unsigned int frame;
+    if (!cricket07_decode_frame_stream(bytes, length, color, 4, &frame)) return 0;
+    pthread_mutex_lock(&g_frame_lock);
+    memcpy(g_latest_color, color, sizeof(color));
+    g_latest_frame = frame;
+    g_frame_generation++;
+    g_frame_available = 1;
+    pthread_mutex_unlock(&g_frame_lock);
+    return 1;
+}
+
+int cricket07_take_frame(float *rgba, size_t count, unsigned int *frame_number,
+                         unsigned long long *generation) {
+    if (!rgba || count < 4 || !frame_number || !generation) return 0;
+    pthread_mutex_lock(&g_frame_lock);
+    int new_frame = g_frame_available && g_frame_generation != *generation;
+    if (new_frame) {
+        memcpy(rgba, g_latest_color, sizeof(g_latest_color));
+        *frame_number = g_latest_frame;
+        *generation = g_frame_generation;
+    }
+    pthread_mutex_unlock(&g_frame_lock);
+    return new_frame;
+}
+
+/* Deterministic producer test; does not imply the real game is linked. */
+int cricket07_submit_test_frame(void) {
+    struct { CmdClear clear; CmdPresent present; } sample;
+    memset(&sample, 0, sizeof(sample));
+    sample.clear.h.type = CMD_CLEAR;
+    sample.clear.h.size = sizeof(CmdClear);
+    sample.clear.flags = 1;
+    sample.clear.color = 0xFF166078u;
+    sample.present.h.type = CMD_PRESENT;
+    sample.present.h.size = sizeof(CmdPresent);
+    sample.present.frame = 7;
+    return cricket07_submit_frame(&sample, sizeof(sample));
+}
