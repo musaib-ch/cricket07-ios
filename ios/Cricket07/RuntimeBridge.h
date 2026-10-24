@@ -22,4 +22,6 @@ int cricket07_submit_frame(const void *bytes, size_t length);
 int cricket07_take_frame(float *rgba, size_t count, unsigned int *frame_number, unsigned long long *generation);
 /// Submit one synthetic diagnostic frame, not actual gameplay.
 int cricket07_submit_test_frame(void);
+/// Synthetic Direct3D CMD_DRAW passed through bounded staging, no live game.
+int cricket07_sample_draw_vertices(float *xyzw, size_t capacity, size_t *count);
 #endif
