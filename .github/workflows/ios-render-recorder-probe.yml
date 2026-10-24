@@ -1,0 +1,40 @@
+name: iOS render recorder transport probe
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'host/render_rec.c'
+      - 'ios/Cricket07/FrameQueue.*'
+      - '.github/workflows/ios-render-recorder-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [iphoneos, iphonesimulator]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cross-compile iOS recorder and frame queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${{ matrix.sdk }}"
+          SDKROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
+          if [ "$SDK" = iphoneos ]; then
+            TARGET=arm64-apple-ios17.0
+          else
+            TARGET=arm64-apple-ios17.0-simulator
+          fi
+          mkdir -p "$RUNNER_TEMP/iosrec"
+          xcrun clang -target "$TARGET" -isysroot "$SDKROOT" -std=gnu11 \
+            -DRC_IOS_FRAME_TRANSPORT=1 -Iruntime -Ihost \
+            -c host/render_rec.c -o "$RUNNER_TEMP/iosrec/render_rec.o"
+          xcrun clang -target "$TARGET" -isysroot "$SDKROOT" -std=gnu11 \
+            -Iios/Cricket07 -c ios/Cricket07/FrameQueue.c \
+            -o "$RUNNER_TEMP/iosrec/FrameQueue.o"
+          xcrun lipo -info "$RUNNER_TEMP/iosrec/render_rec.o"
+          echo "Opt-in iOS recorder transport compilation passed. This is not a linked game." >> "$GITHUB_STEP_SUMMARY"
