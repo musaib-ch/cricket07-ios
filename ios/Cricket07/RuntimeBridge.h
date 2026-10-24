@@ -16,4 +16,10 @@ int cricket07_sample_clear_rgba(float *rgba, size_t count);
 /// Decode an aligned TARGET/CLEAR/PRESENT command sequence; returns 0 for unsupported draw commands.
 int cricket07_decode_frame_stream(const void *bytes, size_t length, float *rgba, size_t count, unsigned int *frame_number);
 int cricket07_sample_frame_stream(float *rgba, size_t count, unsigned int *frame_number);
+/// Submit a validated bounded frame from a producer thread.
+int cricket07_submit_frame(const void *bytes, size_t length);
+/// Read latest frame only when generation changes.
+int cricket07_take_frame(float *rgba, size_t count, unsigned int *frame_number, unsigned long long *generation);
+/// Submit one synthetic diagnostic frame, not actual gameplay.
+int cricket07_submit_test_frame(void);
 #endif
