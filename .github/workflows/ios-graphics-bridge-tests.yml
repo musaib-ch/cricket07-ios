@@ -4,6 +4,7 @@ on:
     branches: [feature/ios-native-foundation]
     paths:
       - 'ios/Cricket07/RenderCommandBridge.c'
+      - 'ios/Cricket07/FrameQueue.c'
       - 'ios/Cricket07/RuntimeBridge.h'
       - 'host/render_cmd.h'
       - 'tests/ios_render_bridge_test.c'
@@ -21,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
-            ios/Cricket07/RenderCommandBridge.c tests/ios_render_bridge_test.c \
+            ios/Cricket07/RenderCommandBridge.c ios/Cricket07/FrameQueue.c tests/ios_render_bridge_test.c \
             -o "$RUNNER_TEMP/bridge-tests"
           "$RUNNER_TEMP/bridge-tests"
       - name: Cross-compile graphics bridge for physical iPhone
