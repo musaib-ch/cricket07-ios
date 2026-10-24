@@ -65,6 +65,20 @@ static void cmd_flush(int ends_frame) {
     web_queue_chunk(g_cb, g_cb_len, ends_frame);   /* takes ownership */
     g_cb = NULL; g_cb_len = g_cb_cap = 0;
 }
+#elif defined(RC_IOS_FRAME_TRANSPORT)
+/* iOS: the game thread records a full frame, and the Metal consumer
+ * receives an owned copy through the bounded frame mailbox.
+ * Unsupported draw commands are deliberately rejected by the consumer
+ * until native draw/texture/shader execution is implemented.
+ */
+extern int cricket07_frame_queue_publish(const void *bytes, size_t length);
+static void cmd_end(void) {}
+static void cmd_flush(int ends_frame) {
+    if (!ends_frame) return;
+    if (g_cb_len && !cricket07_frame_queue_publish(g_cb, g_cb_len))
+        fprintf(stderr, "[ios] failed to publish recorded frame (%zu bytes)\n", g_cb_len);
+    g_cb_len = 0;
+}
 #else
 /* native: run each command as soon as it is recorded */
 static void cmd_end(void) {
