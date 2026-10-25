@@ -75,4 +75,7 @@ int cricket07_take_colored_uv_texture_frame(
     void *texture_commands, size_t texture_capacity, size_t *texture_length);
 /// Publish one synthetic CLEAR/DRAW/PRESENT frame through the actual native mailbox.
 int cricket07_submit_test_triangle_frame(void);
+/// Publish a synthetic TARGET/CLEAR/UPLOAD_TEX/DRAW/PRESENT frame so the
+/// Metal consumer tests texture allocation from the recorded command stream.
+int cricket07_submit_test_uploaded_texture_frame(void);
 #endif
