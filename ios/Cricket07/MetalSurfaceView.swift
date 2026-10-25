@@ -43,6 +43,9 @@ struct MetalSurfaceView: UIViewRepresentable {
         private var pipelineStates: [UInt64: MTLRenderPipelineState] = [:]
         private var vertexShader: MTLFunction?
         private var fragmentShader: MTLFunction?
+        private var diagnosticTextureShader: MTLFunction?
+        private var syntheticTexturePending = false
+        private var diagnosticTexturedFrame = false
         private var depthStates: [UInt32: MTLDepthStencilState] = [:]
         private var stagedVertices: MTLBuffer?
         private var stagedVertexCount = 0
@@ -61,6 +64,7 @@ struct MetalSurfaceView: UIViewRepresentable {
             if let library = device.makeDefaultLibrary() {
                 vertexShader = library.makeFunction(name: "cricket07_staged_vertex")
                 fragmentShader = library.makeFunction(name: "cricket07_test_fragment")
+                diagnosticTextureShader = library.makeFunction(name: "cricket07_test_textured_fragment")
             }
             // Exercise RGBA8 mip allocation without binding textures to draws.
             // This uses generated pixels, never user-owned Cricket 07 assets.
@@ -79,9 +83,12 @@ struct MetalSurfaceView: UIViewRepresentable {
             // Queue a complete synthetic draw frame. Only the supported
             // diagnostic command subset is consumed by this Metal view.
             let submitted = cricket07_submit_test_triangle_frame() == 1
+            // Texture sampling is opt-in for this one generated frame only.
+            // Subsequent externally submitted frames remain untextured.
+            syntheticTexturePending = submitted && textureReady && diagnosticTextureShader != nil
             status.wrappedValue = submitted
                 ? (textureReady
-                   ? "Diagnostic draw queued; RGBA8 mip texture allocated (not sampled)"
+                   ? "Diagnostic draw queued; RGBA8 mip texture ready for synthetic sampling"
                    : "Diagnostic draw queued; texture allocation failed")
                 : "Metal initialized; diagnostic draw frame failed"
         }
@@ -118,19 +125,22 @@ struct MetalSurfaceView: UIViewRepresentable {
         }
 
         private func pipeline(for state: Cricket07DrawState,
-                              view: MTKView) -> MTLRenderPipelineState? {
-            let key = UInt64(state.color_write_mask)
+                              view: MTKView,
+                              diagnosticTextured: Bool) -> MTLRenderPipelineState? {
+            let key = (diagnosticTextured ? (UInt64(1) << 32) : 0)
+                | UInt64(state.color_write_mask)
                 | (UInt64(state.blend) << 4)
                 | (UInt64(state.src_blend) << 5)
                 | (UInt64(state.dst_blend) << 9)
                 | (UInt64(state.blend_op) << 13)
             if let cached = pipelineStates[key] { return cached }
-            guard let device = view.device, let vertexShader, let fragmentShader else {
+            guard let device = view.device, let vertexShader,
+                  let selectedFragment = diagnosticTextured ? diagnosticTextureShader : fragmentShader else {
                 return nil
             }
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = vertexShader
-            descriptor.fragmentFunction = fragmentShader
+            descriptor.fragmentFunction = selectedFragment
             descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
             descriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
             guard let attachment = descriptor.colorAttachments[0] else { return nil }
@@ -238,12 +248,16 @@ struct MetalSurfaceView: UIViewRepresentable {
                         stagedVertices = buffer
                         stagedVertexCount = count
                         stagedCalls = Array(calls.prefix(callCount))
+                        diagnosticTexturedFrame = syntheticTexturePending
+                        syntheticTexturePending = false
                         view.clearColor = MTLClearColor(red: Double(color[0]), green: Double(color[1]),
                                                       blue: Double(color[2]), alpha: Double(color[3]))
                         if !hasReceivedDraw {
                             hasReceivedDraw = true
                             DispatchQueue.main.async { [weak self] in
-                                self?.status.wrappedValue = "Diagnostic CMD_DRAW: transformed positions and diffuse colors"
+                                self?.status.wrappedValue = self?.diagnosticTexturedFrame == true
+                                    ? "Synthetic CMD_DRAW: diffuse colors and sampled RGBA8 texture"
+                                    : "Diagnostic CMD_DRAW: transformed positions and diffuse colors"
                             }
                         }
                     }
@@ -257,15 +271,19 @@ struct MetalSurfaceView: UIViewRepresentable {
             }
             if let stagedVertices, stagedVertexCount > 0,
                !stagedCalls.isEmpty {
+                // Never sample the synthetic texture for a later producer frame.
+                let diagnosticTexture = diagnosticTexturedFrame ? textureStore?.texture(id: 1) : nil
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
                 encoder.setFrontFacing(.clockwise)
                 for call in stagedCalls {
                     guard let device = view.device,
                           let depthState = depthState(for: call.state, device: device),
-                          let drawPipeline = pipeline(for: call.state, view: view) else {
+                          let drawPipeline = pipeline(for: call.state, view: view,
+                                                      diagnosticTextured: diagnosticTexture != nil) else {
                         continue
                     }
                     encoder.setRenderPipelineState(drawPipeline)
+                    encoder.setFragmentTexture(diagnosticTexture, index: 0)
                     encoder.setDepthStencilState(depthState)
                     switch call.state.cull_mode {
                     case 1: encoder.setCullMode(.front)
