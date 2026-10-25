@@ -209,6 +209,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                 var color = [Float](repeating: 0, count: 4)
                 var vertices = [Float](repeating: 0, count: 4096)
                 var diffuse = [Float](repeating: 0, count: 4096)
+                var uv0 = [Float](repeating: 0, count: 2048)
                 var count = 0
                 var frame: UInt32 = 0
                 var calls = [Cricket07DrawCall](repeating: Cricket07DrawCall(), count: 64)
@@ -220,25 +221,30 @@ struct MetalSurfaceView: UIViewRepresentable {
                 let found = color.withUnsafeMutableBufferPointer { c in
                     vertices.withUnsafeMutableBufferPointer { v in
                         diffuse.withUnsafeMutableBufferPointer { colors in
-                            calls.withUnsafeMutableBufferPointer { d in
-                                cricket07_take_colored_viewport_triangle_frame(
-                                    c.baseAddress, c.count, v.baseAddress, v.count,
-                                    colors.baseAddress, colors.count,
-                                    &count, &frame, d.baseAddress, d.count, &callCount,
-                                    UInt32(pixelWidth), UInt32(pixelHeight)) == 1
+                            uv0.withUnsafeMutableBufferPointer { texcoords in
+                                calls.withUnsafeMutableBufferPointer { d in
+                                    cricket07_take_colored_uv_viewport_triangle_frame(
+                                        c.baseAddress, c.count, v.baseAddress, v.count,
+                                        colors.baseAddress, colors.count,
+                                        texcoords.baseAddress, texcoords.count,
+                                        &count, &frame, d.baseAddress, d.count, &callCount,
+                                        UInt32(pixelWidth), UInt32(pixelHeight)) == 1
+                                }
                             }
                         }
                     }
                 }
                 if found && count > 0 {
-                    // Metal receives tightly packed position+diffuse float4 pairs.
-                    // C validates both arrays before this upload.
-                    var active = [Float](repeating: 0, count: count * 8)
+                    // Metal receives tightly packed float4 position, float4 diffuse,
+                    // float2 UV0 (40 bytes/vertex). UVs are recorded, not synthesized.
+                    var active = [Float](repeating: 0, count: count * 10)
                     for i in 0..<count {
                         for channel in 0..<4 {
-                            active[i * 8 + channel] = vertices[i * 4 + channel]
-                            active[i * 8 + 4 + channel] = diffuse[i * 4 + channel]
+                            active[i * 10 + channel] = vertices[i * 4 + channel]
+                            active[i * 10 + 4 + channel] = diffuse[i * 4 + channel]
                         }
+                        active[i * 10 + 8] = uv0[i * 2]
+                        active[i * 10 + 9] = uv0[i * 2 + 1]
                     }
                     let buffer = active.withUnsafeBytes { bytes -> MTLBuffer? in
                         guard let base = bytes.baseAddress else { return nil }
@@ -256,7 +262,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                             hasReceivedDraw = true
                             DispatchQueue.main.async { [weak self] in
                                 self?.status.wrappedValue = self?.diagnosticTexturedFrame == true
-                                    ? "Synthetic CMD_DRAW: diffuse colors and sampled RGBA8 texture"
+                                    ? "Synthetic CMD_DRAW: recorded UV0 and sampled RGBA8 texture"
                                     : "Diagnostic CMD_DRAW: transformed positions and diffuse colors"
                             }
                         }
