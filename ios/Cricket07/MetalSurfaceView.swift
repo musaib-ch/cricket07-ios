@@ -39,6 +39,7 @@ struct MetalSurfaceView: UIViewRepresentable {
 
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
+        private var textureStore: MetalTextureStore?
         private var pipelineStates: [UInt64: MTLRenderPipelineState] = [:]
         private var vertexShader: MTLFunction?
         private var fragmentShader: MTLFunction?
@@ -61,11 +62,27 @@ struct MetalSurfaceView: UIViewRepresentable {
                 vertexShader = library.makeFunction(name: "cricket07_staged_vertex")
                 fragmentShader = library.makeFunction(name: "cricket07_test_fragment")
             }
+            // Exercise RGBA8 mip allocation without binding textures to draws.
+            // This uses generated pixels, never user-owned Cricket 07 assets.
+            let store = MetalTextureStore(device: device)
+            var sample = [UInt8](repeating: 0, count: 256)
+            var sampleLength = 0
+            let generated = sample.withUnsafeMutableBytes { raw in
+                cricket07_make_test_texture_upload(
+                    raw.baseAddress, raw.count, &sampleLength) == 1
+            }
+            let textureReady = generated &&
+                store.upload(command: Data(sample.prefix(sampleLength))) &&
+                store.texture(id: 1) != nil
+            textureStore = store
+
             // Queue a complete synthetic draw frame. Only the supported
             // diagnostic command subset is consumed by this Metal view.
             let submitted = cricket07_submit_test_triangle_frame() == 1
             status.wrappedValue = submitted
-                ? "Metal initialized; diagnostic draw frame queued"
+                ? (textureReady
+                   ? "Diagnostic draw queued; RGBA8 mip texture allocated (not sampled)"
+                   : "Diagnostic draw queued; texture allocation failed")
                 : "Metal initialized; diagnostic draw frame failed"
         }
 
