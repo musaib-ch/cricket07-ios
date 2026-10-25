@@ -1,4 +1,5 @@
 #include "FrameQueue.h"
+#include "TextureUploadBridge.h"
 #include "TriangleStaging.h"
 #include "VertexTransform.h"
 #include "ViewportBridge.h"
@@ -20,11 +21,14 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                                     size_t *call_count, uint32_t target_width,
                                     uint32_t target_height,
                                     float *diffuse_rgba, size_t diffuse_float_capacity,
-                                    float *uv0, size_t uv_float_capacity) {
+                                    float *uv0, size_t uv_float_capacity,
+                                    void *texture_commands, size_t texture_capacity,
+                                    size_t *texture_length) {
     if (!rgba || color_capacity < 4 || !xyzw || !vertex_count || !frame_number) return 0;
     if (calls && (!call_count || !call_capacity || !target_width || !target_height)) return 0;
     if (diffuse_rgba && diffuse_float_capacity < 4u) return 0;
     if (uv0 && (!diffuse_rgba || uv_float_capacity < 2u)) return 0;
+    if (texture_commands && (!texture_length || !uv0 || !texture_capacity)) return 0;
     const size_t limit = 16u * 1024u * 1024u;
     unsigned char *bytes = malloc(limit);
     if (!bytes) return 0;
@@ -34,7 +38,7 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
     size_t vertices = 0, offset = 0;
     unsigned int frame = 0;
     int presented = 0, drawn = 0, cleared = 0, ok = 1;
-    size_t n_calls = 0;
+    size_t n_calls = 0, texture_written = 0, texture_ops = 0;
     uint32_t logical_width = 0, logical_height = 0;
     while (offset < length && ok) {
         CmdHdr h;
@@ -146,6 +150,31 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
             }
             vertices += added;
             drawn = 1;
+        } else if (h.type == CMD_UPLOAD_TEX || h.type == CMD_DESTROY_TEX) {
+            /* Texture mutations must precede all draws in this narrow path.
+             * Preserve complete validated commands for Metal upload after
+             * the frame is fully validated, never a pointer into freed bytes. */
+            if (!texture_commands || drawn || texture_ops >= 256u ||
+                texture_written > texture_capacity ||
+                h.size > texture_capacity - texture_written) {
+                ok = 0; break;
+            }
+            if (h.type == CMD_UPLOAD_TEX) {
+                Cricket07TextureUpload decoded;
+                if (!cricket07_decode_texture_upload(item, h.size, &decoded)) {
+                    ok = 0; break;
+                }
+            } else {
+                CmdDestroy destroy;
+                if (h.size != ((sizeof(destroy) + 7u) & ~(size_t)7u)) {
+                    ok = 0; break;
+                }
+                memcpy(&destroy, item, sizeof(destroy));
+                if (!destroy.id) { ok = 0; break; }
+            }
+            memcpy((unsigned char *)texture_commands + texture_written, item, h.size);
+            texture_written += h.size;
+            ++texture_ops;
         } else if (h.type == CMD_PRESENT) {
             CmdPresent c;
             if (h.size < sizeof(c)) { ok = 0; break; }
@@ -163,6 +192,7 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
     *vertex_count = vertices;
     *frame_number = frame;
     if (calls) *call_count = n_calls;
+    if (texture_commands) *texture_length = texture_written;
     return 1;
 }
 
@@ -171,7 +201,7 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
                                   float *xyzw, size_t vertex_float_capacity,
                                   size_t *vertex_count, unsigned int *frame_number) {
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
-                                    vertex_count, frame_number, 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL, 0);
+                                    vertex_count, frame_number, 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL, 0, NULL, 0, NULL);
 }
 
 /* Metal consumer: reject unsupported transforms instead of drawing raw D3D
@@ -180,7 +210,7 @@ int cricket07_take_transformed_triangle_frame(float *rgba, size_t color_capacity
                                               float *xyzw, size_t vertex_float_capacity,
                                               size_t *vertex_count, unsigned int *frame_number) {
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
-                                    vertex_count, frame_number, 1, NULL, 0, NULL, 0, 0, NULL, 0, NULL, 0);
+                                    vertex_count, frame_number, 1, NULL, 0, NULL, 0, 0, NULL, 0, NULL, 0, NULL, 0, NULL);
 }
 
 
@@ -194,7 +224,7 @@ int cricket07_take_viewport_triangle_frame(float *rgba, size_t color_capacity,
     if (!calls || !call_count) return 0;
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
                                     vertex_count, frame_number, 1, calls, call_capacity,
-                                    call_count, target_width, target_height, NULL, 0, NULL, 0);
+                                    call_count, target_width, target_height, NULL, 0, NULL, 0, NULL, 0, NULL);
 }
 
 /* New opt-in diagnostic path: preserves per-vertex D3DCOLOR diffuse
@@ -230,7 +260,29 @@ int cricket07_take_colored_uv_viewport_triangle_frame(
                                     vertex_count, frame_number, 1, calls, call_capacity,
                                     call_count, target_width, target_height,
                                     diffuse_rgba, diffuse_float_capacity,
-                                    uv0, uv_float_capacity);
+                                    uv0, uv_float_capacity, NULL, 0, NULL);
+}
+
+/* Opt-in texture-operation path. Only uploads/destroys before the first
+ * draw are supported, and the caller must apply the returned commands
+ * before submitting the validated draw calls to Metal. */
+int cricket07_take_colored_uv_texture_frame(
+    float *rgba, size_t color_capacity,
+    float *xyzw, size_t vertex_float_capacity,
+    float *diffuse_rgba, size_t diffuse_float_capacity,
+    float *uv0, size_t uv_float_capacity,
+    size_t *vertex_count, unsigned int *frame_number,
+    Cricket07DrawCall *calls, size_t call_capacity, size_t *call_count,
+    uint32_t target_width, uint32_t target_height,
+    void *texture_commands, size_t texture_capacity, size_t *texture_length) {
+    if (!calls || !call_count || !diffuse_rgba || !uv0 ||
+        !texture_commands || !texture_length) return 0;
+    return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
+                                    vertex_count, frame_number, 1, calls, call_capacity,
+                                    call_count, target_width, target_height,
+                                    diffuse_rgba, diffuse_float_capacity,
+                                    uv0, uv_float_capacity,
+                                    texture_commands, texture_capacity, texture_length);
 }
 
 /* Synthetic complete command stream, exercising the same mailbox and
