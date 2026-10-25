@@ -26,6 +26,10 @@ int main(void) {
         CmdDraw draw = {0};
         draw.h.type = CMD_DRAW; draw.h.size = (uint32_t)stride;
         draw.key.topo = 4; draw.nverts = 3;
+        draw.key.zen = i ? 1u : 0u;
+        draw.key.zwrite = i ? 1u : 0u;
+        draw.key.zfunc = i ? 5u : 0u;
+        draw.key.cull = i ? 3u : 2u;
         draw.u.flags[0] = 2;
         draw.u.vp[2] = 640; draw.u.vp[3] = 480;
         draw.maxz = 1;
@@ -61,6 +65,10 @@ int main(void) {
     assert(fabs(calls[0].viewport.width - 640.) < 0.001);
     assert(fabs(calls[1].viewport.width - 640.) < 0.001);
     assert(fabs(calls[0].viewport.height - 960.) < 0.001);
+    assert(calls[0].state.depth_compare == 8 && calls[0].state.depth_write == 0);
+    assert(calls[0].state.cull_mode == 1);
+    assert(calls[1].state.depth_compare == 5 && calls[1].state.depth_write == 1);
+    assert(calls[1].state.cull_mode == 2);
     assert(fabs(xyzw[0] - (-0.5f + 1.f / 640.f)) < 0.001);
 
     /* Reject a second draw when the metadata array can hold only one. */
@@ -68,6 +76,26 @@ int main(void) {
     assert(!cricket07_take_viewport_triangle_frame(color, 4, xyzw, 24,
                                                    &nverts, &frame, calls, 1,
                                                    &ncalls, 1280, 960));
+    /* Reject an invalid depth comparison without accepting a partial frame. */
+    const size_t second_draw_offset = sizeof(CmdTarget) + sizeof(CmdClear) + stride;
+    CmdDraw invalid = {0};
+    memcpy(&invalid, stream + second_draw_offset, sizeof invalid);
+    invalid.key.zfunc = 9u;
+    memcpy(stream + second_draw_offset, &invalid, sizeof invalid);
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(!cricket07_take_viewport_triangle_frame(color, 4, xyzw, 24,
+                                                   &nverts, &frame, calls, 2,
+                                                   &ncalls, 1280, 960));
+
+    Cricket07DrawState state = {0};
+    assert(!cricket07_resolve_draw_state(NULL, &state));
+    invalid.key.zfunc = 4u;
+    invalid.key.cull = 4u;
+    assert(!cricket07_resolve_draw_state(&invalid, &state));
+    invalid.key.cull = 1u;
+    assert(cricket07_resolve_draw_state(&invalid, &state));
+    assert(state.cull_mode == 0 && state.depth_compare == 4);
+
     cricket07_frame_queue_reset();
     puts("iOS multi-viewport draw regression passed");
     return 0;
