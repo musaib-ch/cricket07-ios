@@ -1,0 +1,32 @@
+name: Cricket 07 iOS host bootstrap preflight
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/EngineBootstrap.*'
+      - 'ios/tests/ios_engine_bootstrap_test.c'
+      - '.github/workflows/ios-engine-bootstrap.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-bootstrap:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ordered host setup, failures and idempotence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in TEST_VALID TEST_IMPORT_FAILURE TEST_RECORDER_FAILURE; do
+            clang -std=gnu11 -Wall -Wextra -Werror "-D$mode" \
+              -Iios/engine -Ihost \
+              ios/engine/EngineBootstrap.c \
+              ios/tests/ios_engine_bootstrap_test.c \
+              -o "$RUNNER_TEMP/bootstrap-$mode"
+            "$RUNNER_TEMP/bootstrap-$mode"
+          done
