@@ -3,6 +3,7 @@
 #include "VertexTransform.h"
 #include "ViewportBridge.h"
 #include "render_cmd.h"
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,10 +19,12 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                                     Cricket07DrawCall *calls, size_t call_capacity,
                                     size_t *call_count, uint32_t target_width,
                                     uint32_t target_height,
-                                    float *diffuse_rgba, size_t diffuse_float_capacity) {
+                                    float *diffuse_rgba, size_t diffuse_float_capacity,
+                                    float *uv0, size_t uv_float_capacity) {
     if (!rgba || color_capacity < 4 || !xyzw || !vertex_count || !frame_number) return 0;
     if (calls && (!call_count || !call_capacity || !target_width || !target_height)) return 0;
     if (diffuse_rgba && diffuse_float_capacity < 4u) return 0;
+    if (uv0 && (!diffuse_rgba || uv_float_capacity < 2u)) return 0;
     const size_t limit = 16u * 1024u * 1024u;
     unsigned char *bytes = malloc(limit);
     if (!bytes) return 0;
@@ -93,6 +96,10 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                     added > diffuse_float_capacity / 4u - vertices) {
                     ok = 0; break;
                 }
+                if (uv0 && (vertices > uv_float_capacity / 2u ||
+                            added > uv_float_capacity / 2u - vertices)) {
+                    ok = 0; break;
+                }
                 const unsigned char *source = item + sizeof(CmdDraw);
                 for (size_t i = 0; i < added; ++i) {
                     CVert vertex;
@@ -103,6 +110,12 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                     out[1] = (float)((packed >> 8) & 255u) / 255.0f;
                     out[2] = (float)(packed & 255u) / 255.0f;
                     out[3] = (float)((packed >> 24) & 255u) / 255.0f;
+                    if (uv0) {
+                        const float u = vertex.tc[0][0], v = vertex.tc[0][1];
+                        if (!isfinite(u) || !isfinite(v)) { ok = 0; break; }
+                        uv0[(vertices + i) * 2u] = u;
+                        uv0[(vertices + i) * 2u + 1u] = v;
+                    }
                 }
             }
             if (calls && ok) {
@@ -152,7 +165,7 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
                                   float *xyzw, size_t vertex_float_capacity,
                                   size_t *vertex_count, unsigned int *frame_number) {
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
-                                    vertex_count, frame_number, 0, NULL, 0, NULL, 0, 0, NULL, 0);
+                                    vertex_count, frame_number, 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL, 0);
 }
 
 /* Metal consumer: reject unsupported transforms instead of drawing raw D3D
@@ -161,7 +174,7 @@ int cricket07_take_transformed_triangle_frame(float *rgba, size_t color_capacity
                                               float *xyzw, size_t vertex_float_capacity,
                                               size_t *vertex_count, unsigned int *frame_number) {
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
-                                    vertex_count, frame_number, 1, NULL, 0, NULL, 0, 0, NULL, 0);
+                                    vertex_count, frame_number, 1, NULL, 0, NULL, 0, 0, NULL, 0, NULL, 0);
 }
 
 
@@ -175,7 +188,7 @@ int cricket07_take_viewport_triangle_frame(float *rgba, size_t color_capacity,
     if (!calls || !call_count) return 0;
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
                                     vertex_count, frame_number, 1, calls, call_capacity,
-                                    call_count, target_width, target_height, NULL, 0);
+                                    call_count, target_width, target_height, NULL, 0, NULL, 0);
 }
 
 /* New opt-in diagnostic path: preserves per-vertex D3DCOLOR diffuse
@@ -192,7 +205,26 @@ int cricket07_take_colored_viewport_triangle_frame(
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
                                     vertex_count, frame_number, 1, calls, call_capacity,
                                     call_count, target_width, target_height,
-                                    diffuse_rgba, diffuse_float_capacity);
+                                    diffuse_rgba, diffuse_float_capacity, NULL, 0);
+}
+
+/* Optional UV0 path. Read CVert.tc[0].xy verbatim from the recorded draw,
+ * without inferring texture stage bindings or enabling game texture draws.
+ * Existing untextured APIs remain unchanged. */
+int cricket07_take_colored_uv_viewport_triangle_frame(
+    float *rgba, size_t color_capacity,
+    float *xyzw, size_t vertex_float_capacity,
+    float *diffuse_rgba, size_t diffuse_float_capacity,
+    float *uv0, size_t uv_float_capacity,
+    size_t *vertex_count, unsigned int *frame_number,
+    Cricket07DrawCall *calls, size_t call_capacity, size_t *call_count,
+    uint32_t target_width, uint32_t target_height) {
+    if (!calls || !call_count || !diffuse_rgba || !uv0) return 0;
+    return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
+                                    vertex_count, frame_number, 1, calls, call_capacity,
+                                    call_count, target_width, target_height,
+                                    diffuse_rgba, diffuse_float_capacity,
+                                    uv0, uv_float_capacity);
 }
 
 /* Synthetic complete command stream, exercising the same mailbox and
@@ -234,6 +266,10 @@ int cricket07_submit_test_triangle_frame(void) {
     vertices[0].diffuse = 0xFFFF3333u;
     vertices[1].diffuse = 0xFF33CC66u;
     vertices[2].diffuse = 0xFF4D80FFu;
+    /* Distinct UVs, not derived from clip-space positions. */
+    vertices[0].tc[0][0] = 0.0f; vertices[0].tc[0][1] = 1.0f;
+    vertices[1].tc[0][0] = 1.0f; vertices[1].tc[0][1] = 1.0f;
+    vertices[2].tc[0][0] = 0.5f; vertices[2].tc[0][1] = 0.0f;
 
     CmdPresent present = {0};
     present.h.type = CMD_PRESENT;
