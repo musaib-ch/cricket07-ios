@@ -258,6 +258,15 @@ int cricket07_submit_test_triangle_frame(void) {
     draw.h.size = (uint32_t)draw_size;
     draw.key.topo = 4u;  /* WGPU triangle-list topology */
     draw.key.cmask = 15u; /* write all RGBA channels */
+    /* Exercise the same validated texture binding used by the Metal
+     * consumer. Only generated diagnostic texture ID 1 is resident. */
+    draw.slot_kind[0] = TS_TEX;
+    draw.slot_id[0] = 1u;
+    draw.samp_key[0] = 432u; /* nearest, clamp U/V, no mip filtering */
+    draw.u.st0[0] = 4u; draw.u.st0[1] = 2u;
+    draw.u.st0[2] = 0u; draw.u.st0[3] = 4u;
+    draw.u.st0b[0] = 2u; draw.u.st0b[1] = 0u;
+    draw.u.st1[0] = 1u; /* stage 1 disabled */
     draw.nverts = 3u;
     draw.vp[2] = 640.0f; draw.vp[3] = 480.0f;
     draw.maxz = 1.0f;
