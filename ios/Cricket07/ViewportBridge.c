@@ -1,0 +1,44 @@
+#include "ViewportBridge.h"
+#include <math.h>
+#include <stddef.h>
+
+/* A draw's vp is in logical target pixels; the GPU viewport is in physical
+ * target pixels. Clamp to the backbuffer, including negative origins.
+ * Reject invalid depth intervals rather than submitting a Metal command.
+ */
+int cricket07_resolve_viewport(const CmdDraw *draw,
+                              uint32_t target_width, uint32_t target_height,
+                              uint32_t logical_width, uint32_t logical_height,
+                              Cricket07Viewport *out) {
+    if (!draw || !out || !target_width || !target_height ||
+        !logical_width || !logical_height ||
+        target_width > 16384u || target_height > 16384u ||
+        logical_width > 16384u || logical_height > 16384u ||
+        !isfinite(draw->minz) || !isfinite(draw->maxz) ||
+        draw->minz < 0.f || draw->maxz > 1.f ||
+        draw->minz > draw->maxz) return 0;
+
+    double x = 0, y = 0;
+    double right = (double)target_width;
+    double bottom = (double)target_height;
+    if (!draw->full_viewport) {
+        for (size_t i = 0; i < 4; ++i)
+            if (!isfinite(draw->vp[i])) return 0;
+        if (draw->vp[2] <= 0.f || draw->vp[3] <= 0.f) return 0;
+        const double sx = (double)target_width / logical_width;
+        const double sy = (double)target_height / logical_height;
+        x = (double)draw->vp[0] * sx;
+        y = (double)draw->vp[1] * sy;
+        right = ((double)draw->vp[0] + draw->vp[2]) * sx;
+        bottom = ((double)draw->vp[1] + draw->vp[3]) * sy;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (right > target_width) right = target_width;
+        if (bottom > target_height) bottom = target_height;
+    }
+    if (x >= right || y >= bottom) return 0;
+    Cricket07Viewport staged = {x, y, right - x, bottom - y,
+                                draw->minz, draw->maxz};
+    *out = staged;
+    return 1;
+}
