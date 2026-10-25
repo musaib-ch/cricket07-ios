@@ -28,6 +28,16 @@ int main(void) {
     assert(rgba[3] == 1.0f);
     assert(cricket07_take_triangle_frame(rgba, 4, xyzw, 12, &count, &frame) == 0);
 
+    /* The Metal consumer must use transformed clip-space positions, not raw D3D
+     * coordinates. Mode 2 applies the half-pixel correction from the WGSL VS. */
+    assert(cricket07_submit_test_triangle_frame() == 1);
+    assert(cricket07_take_transformed_triangle_frame(rgba, 4, xyzw, 12, &count, &frame) == 1);
+    assert(count == 3 && frame == 7);
+    assert(fabsf(xyzw[0] - (-0.7f + 1.f / 640.f)) < 0.0001f);
+    assert(fabsf(xyzw[1] - (-0.55f - 1.f / 480.f)) < 0.0001f);
+    assert(fabsf(xyzw[4] - (0.7f + 1.f / 640.f)) < 0.0001f);
+    assert(xyzw[3] == 1.f && xyzw[7] == 1.f && xyzw[11] == 1.f);
+
     /* Two sequential CMD_DRAW commands must combine into one Metal buffer. */
     {
         const size_t draw_size = (sizeof(CmdDraw) + 3u * sizeof(CVert) + 7u) & ~(size_t)7u;
@@ -69,6 +79,10 @@ int main(void) {
         assert(fabsf(multi[0] + 0.8f) < 0.0001f);
         assert(fabsf(multi[12] - 0.1f) < 0.0001f);
         assert(multi[23] == 1.0f);
+        /* Zero viewport dimensions are invalid for the transformed path.
+         * The legacy raw staging API above intentionally still accepts them. */
+        assert(cricket07_frame_queue_publish(stream, offset) == 1);
+        assert(cricket07_take_transformed_triangle_frame(rgba, 4, multi, 24, &count, &frame) == 0);
         /* A capacity of only five vertices must reject the second draw. */
         assert(cricket07_frame_queue_publish(stream, offset) == 1);
         assert(cricket07_take_triangle_frame(rgba, 4, multi, 20, &count, &frame) == 0);
