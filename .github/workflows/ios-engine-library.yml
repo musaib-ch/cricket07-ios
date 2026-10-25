@@ -10,6 +10,7 @@ on:
       - 'ios/Cricket07/ControllerInputPump.*'
       - 'ios/engine/ControllerDirectInputAdapter.*'
       - 'ios/engine/EngineRenderBackend.*'
+      - 'ios/engine/EngineBootstrap.*'
       - '.github/workflows/ios-engine-library.yml'
   workflow_dispatch:
 
@@ -49,6 +50,7 @@ jobs:
             ios/Cricket07/ControllerInputPump.c
             ios/engine/ControllerDirectInputAdapter.c
             ios/engine/EngineRenderBackend.c
+            ios/engine/EngineBootstrap.c
           )
           for src in "${SOURCES[@]}"; do
             object="$OUT/objects/${src//\//_}.o"
@@ -88,6 +90,9 @@ jobs:
           grep -Fq '_cricket07_frame_queue_publish' "$OUT/recorder-undefined.txt"
           grep -Fq '_cricket07_frame_queue_publish' "$OUT/frame-queue-symbols.txt"
           grep -Fq '_cricket07_engine_select_ios_recorder' "$OUT/backend-selection-symbols.txt"
+          xcrun nm -g "$OUT/objects/ios_engine_EngineBootstrap.c.o" > "$OUT/bootstrap-symbols.txt"
+          grep -Fq '_cricket07_engine_prepare_host' "$OUT/bootstrap-symbols.txt"
+          grep -Fq '_cricket07_engine_host_prepared' "$OUT/bootstrap-symbols.txt"
           grep -Fq '_g_render' "$OUT/d3d-backend-symbols.txt"
           grep -Fq '_g_render_gpu' "$OUT/recorder-backend-symbols.txt"
           if grep -Eq '_gpu_(exec|init_native)' "$OUT/recorder-undefined.txt"; then
@@ -104,7 +109,7 @@ jobs:
             echo "Compiled ${#SOURCES[@]} C translation units for $TARGET."
             echo "Archive: libcricket07host-$SDK.a"
             echo
-            echo "Includes iOS frame mailbox, recorder transport, and an explicit opt-in backend selection API (no desktop GPU executor)."
+            echo "Includes iOS frame mailbox, recorder transport, and a guarded host bootstrap preparation API (no desktop GPU executor)."
             echo "This is an unlinked intermediate library, NOT a playable engine or IPA."
             echo "Still missing: generated Cricket 07 game functions, live Metal command coverage, iOS game lifecycle integration, game assets, and final app linkage."
           } >> "$GITHUB_STEP_SUMMARY"
