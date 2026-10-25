@@ -43,6 +43,7 @@ struct MetalSurfaceView: UIViewRepresentable {
         private var diagnosticDepthState: MTLDepthStencilState?
         private var stagedVertices: MTLBuffer?
         private var stagedVertexCount = 0
+        private var stagedCalls: [Cricket07DrawCall] = []
         private var hasReceivedDraw = false
         private let status: Binding<String>
 
@@ -86,10 +87,20 @@ struct MetalSurfaceView: UIViewRepresentable {
                 var vertices = [Float](repeating: 0, count: 4096)
                 var count = 0
                 var frame: UInt32 = 0
+                var calls = [Cricket07DrawCall](repeating: Cricket07DrawCall(), count: 64)
+                var callCount = 0
+                let pixelWidth = Int(view.drawableSize.width)
+                let pixelHeight = Int(view.drawableSize.height)
+                guard pixelWidth > 0 && pixelHeight > 0 &&
+                      pixelWidth <= 16384 && pixelHeight <= 16384 else { return }
                 let found = color.withUnsafeMutableBufferPointer { c in
                     vertices.withUnsafeMutableBufferPointer { v in
-                        cricket07_take_transformed_triangle_frame(c.baseAddress, c.count,
-                                                      v.baseAddress, v.count, &count, &frame) == 1
+                        calls.withUnsafeMutableBufferPointer { d in
+                            cricket07_take_viewport_triangle_frame(
+                                c.baseAddress, c.count, v.baseAddress, v.count,
+                                &count, &frame, d.baseAddress, d.count, &callCount,
+                                UInt32(pixelWidth), UInt32(pixelHeight)) == 1
+                        }
                     }
                 }
                 if found && count > 0 {
@@ -102,6 +113,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                     if let buffer {
                         stagedVertices = buffer
                         stagedVertexCount = count
+                        stagedCalls = Array(calls.prefix(callCount))
                         view.clearColor = MTLClearColor(red: Double(color[0]), green: Double(color[1]),
                                                       blue: Double(color[2]), alpha: Double(color[3]))
                         if !hasReceivedDraw {
@@ -119,13 +131,22 @@ struct MetalSurfaceView: UIViewRepresentable {
                   let encoder = command.makeRenderCommandEncoder(descriptor: descriptor) else {
                 return
             }
-            if let testPipeline, let stagedVertices, stagedVertexCount > 0 {
+            if let testPipeline, let stagedVertices, stagedVertexCount > 0,
+               !stagedCalls.isEmpty {
                 encoder.setRenderPipelineState(testPipeline)
                 if let diagnosticDepthState {
                     encoder.setDepthStencilState(diagnosticDepthState)
                 }
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
-                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: stagedVertexCount)
+                for call in stagedCalls {
+                    let vp = call.viewport
+                    encoder.setViewport(MTLViewport(originX: vp.x, originY: vp.y,
+                                                    width: vp.width, height: vp.height,
+                                                    znear: vp.min_depth, zfar: vp.max_depth))
+                    encoder.drawPrimitives(type: .triangle,
+                                           vertexStart: Int(call.first_vertex),
+                                           vertexCount: Int(call.vertex_count))
+                }
             }
             encoder.endEncoding()
             command.present(drawable)
