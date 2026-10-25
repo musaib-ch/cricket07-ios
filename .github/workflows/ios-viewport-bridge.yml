@@ -1,0 +1,34 @@
+name: iOS viewport bridge regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/ViewportBridge.c'
+      - 'ios/Cricket07/ViewportBridge.h'
+      - 'tests/ios_viewport_bridge_test.c'
+      - '.github/workflows/ios-viewport-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run viewport reference tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/ViewportBridge.c tests/ios_viewport_bridge_test.c \
+            -o "$RUNNER_TEMP/viewport-tests"
+          "$RUNNER_TEMP/viewport-tests"
+      - name: Cross compile viewport bridge for iPhone ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
+            -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            -c ios/Cricket07/ViewportBridge.c -o "$RUNNER_TEMP/ViewportBridge.o"
+          echo "Viewport CPU reference tested; not yet connected to live game rendering." >> "$GITHUB_STEP_SUMMARY"
