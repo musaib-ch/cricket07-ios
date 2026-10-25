@@ -27,14 +27,13 @@ vertex TriangleVertex cricket07_staged_vertex(const device StagedVertex *vertice
     TriangleVertex out;
     out.position = vertices[id].position;
     out.color = vertices[id].color;
-    // C validates and stages the recorded CVert.tc[0].xy values.
-    // Texture stage semantics and game texture binding remain unsupported.
+    // C validates CVert.tc[0].xy and a narrow stage-0 modulation mode.
     out.uv = vertices[id].uv;
     return out;
 }
 
-// Samples a generated test texture on the synthetic triangle only.
-// Real D3D8 texture coordinates, stage combiners and bindings are not yet ported.
+// Fixed-function stage-0 texture * diffuse, nearest filtering and clamp.
+// This is not a general Direct3D8 stage combiner or pixel shader.
 fragment float4 cricket07_test_textured_fragment(
     TriangleVertex in [[stage_in]],
     texture2d<float> diagnosticTexture [[texture(0)]]) {
