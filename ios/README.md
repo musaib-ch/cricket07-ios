@@ -19,7 +19,9 @@ This directory is an initial iOS controller and architecture foundation, **not a
 - Tests run through `ios-draw-frame-consumer.yml`; `ios-app-shell.yml` compiles and packages the unsigned diagnostic app for iPhone and Simulator.
 - The diagnostic Metal renderer now translates per-draw depth comparison/write, culling, RGBA write masks and a bounded set of D3D8 blend factors/operations into cached Metal pipeline states.
 - The unlit diagnostic draw path now decodes each `CVert.diffuse` ARGB value into normalized RGBA and uploads position+color pairs to Metal. Textured, lit, and pixel-shader draws are explicitly rejected by this path; this is not game shading. Unsupported values fail validation. Production texture sampling, alpha testing, non-backbuffer render targets, game-generated commands, and device gameplay verification remain outstanding.
-- `TextureUploadBridge.c` validates bounded RGBA8 mip-chain commands, and `MetalTextureStore.swift` now allocates and uploads those mip levels into a memory-capped Metal texture cache. A synthetic 2x2 test texture exercises the upload during diagnostic initialization. **No texture is bound to a draw, no game texture commands are consumed, and texture sampling is not implemented.**
+- `TextureUploadBridge.c` validates bounded RGBA8 mip-chain commands, and `MetalTextureStore.swift` now allocates and uploads those mip levels into a memory-capped Metal texture cache. A synthetic 2x2 test texture exercises the upload during diagnostic initialization. The synthetic diagnostic triangle can sample this texture, but no game texture commands or game engine draws are connected.
+
+- The diagnostic `CMD_DRAW` path now carries bounded, finite `CVert.tc[0].xy` values to Metal as explicit UV0 attributes. The generated triangle uses recorded UVs for sampling instead of deriving them from clip-space positions. D3D8 texture-stage combiners, sampler-state translation, per-draw game texture binding, and actual gameplay remain unimplemented.
 
 ## Critical blockers
 1. Existing build.sh targets macOS and uses Cocoa, IOKit, SDL2, and desktop wgpu libraries.
