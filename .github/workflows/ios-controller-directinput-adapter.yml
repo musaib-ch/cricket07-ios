@@ -1,0 +1,29 @@
+name: iOS controller DirectInput adapter regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/ControllerDirectInputAdapter.*'
+      - 'ios/Cricket07/ControllerInputQueue.*'
+      - 'ios/Cricket07/ControllerInputPump.*'
+      - 'ios/tests/controller_directinput_adapter_test.c'
+      - '.github/workflows/ios-controller-directinput-adapter.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test game-thread HID-to-DirectInput adapter
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -pthread \
+            -Iios/Cricket07 -Iios/engine \
+            ios/Cricket07/ControllerInputQueue.c \
+            ios/Cricket07/ControllerInputPump.c \
+            ios/engine/ControllerDirectInputAdapter.c \
+            ios/tests/controller_directinput_adapter_test.c \
+            -o /tmp/cricket07-directinput-adapter-test
+          /tmp/cricket07-directinput-adapter-test
