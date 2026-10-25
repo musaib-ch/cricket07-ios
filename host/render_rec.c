@@ -481,6 +481,11 @@ static int rec_init(Device *d) {
 #ifdef __EMSCRIPTEN__
     while (!web_gpu_ready()) usleep(1000);   /* the page creates the WebGPU device before starting the game */
     return 1;
+#elif defined(RC_IOS_FRAME_TRANSPORT)
+    /* iOS renders queued commands in MTKView, not through desktop wgpu.
+     * The view owns Metal initialization; this only enables recording.
+     * The translated game engine itself is not yet linked into the app. */
+    return 1;
 #else
     return gpu_init_native();
 #endif
@@ -500,6 +505,21 @@ static void rec_present_impl(Device *d) {
 }
 
 static void rec_readback_impl(Device *d, Surface *s) {
+#if defined(RC_IOS_FRAME_TRANSPORT)
+    /* The iOS mailbox flushes only completed frames. A synchronous
+     * CMD_READBACK would otherwise wait forever on a completion flag
+     * that no Metal readback executor can currently signal. Explicitly
+     * report the unsupported operation instead of deadlocking the game
+     * thread. Do not fabricate readback pixels or claim support. */
+    (void)d;
+    (void)s;
+    static int warned;
+    if (!warned) {
+        fprintf(stderr, "[ios] synchronous render-target readback is unsupported; no GPU data returned\n");
+        warned = 1;
+    }
+    return;
+#else
     int is_bb = com_data(d->backbuffer) == s;
     if (!is_bb && !s->is_rt) return;
     if (!s->mem) s->mem = heap_alloc(s->pitch * s->height + 16, 1);
@@ -511,6 +531,7 @@ static void rec_readback_impl(Device *d, Surface *s) {
     cmd_end();
     cmd_flush(0);
     while (!__atomic_load_n(&done, __ATOMIC_ACQUIRE)) usleep(200);   /* natively it already ran */
+#endif
 }
 
 static void rec_upload_surface_impl(Device *d, Surface *s) {
