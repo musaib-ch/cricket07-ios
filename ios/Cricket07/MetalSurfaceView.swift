@@ -69,31 +69,15 @@ struct MetalSurfaceView: UIViewRepresentable {
                 fragmentShader = library.makeFunction(name: "cricket07_test_fragment")
                 diagnosticTextureShader = library.makeFunction(name: "cricket07_test_textured_fragment")
             }
-            // Exercise RGBA8 mip allocation without binding textures to draws.
-            // This uses generated pixels, never user-owned Cricket 07 assets.
-            let store = MetalTextureStore(device: device)
-            var sample = [UInt8](repeating: 0, count: 256)
-            var sampleLength = 0
-            let generated = sample.withUnsafeMutableBytes { raw in
-                cricket07_make_test_texture_upload(
-                    raw.baseAddress, raw.count, &sampleLength) == 1
-            }
-            let textureReady = generated &&
-                store.upload(command: Data(sample.prefix(sampleLength))) &&
-                store.texture(id: 1) != nil
-            textureStore = store
-
-            // Queue a complete synthetic draw frame. Only the supported
-            // diagnostic command subset is consumed by this Metal view.
-            let submitted = cricket07_submit_test_triangle_frame() == 1
-            // Only the generated test texture is resident until actual texture
-            // upload commands are integrated into the frame consumer.
-            syntheticTexturePending = submitted && textureReady && diagnosticTextureShader != nil
+            // The texture store starts empty. The synthetic producer now
+            // includes CMD_UPLOAD_TEX in the same recorded frame as CMD_DRAW.
+            // This exercises the queue, C decoder and Metal upload together.
+            textureStore = MetalTextureStore(device: device)
+            let submitted = cricket07_submit_test_uploaded_texture_frame() == 1
+            syntheticTexturePending = submitted
             status.wrappedValue = submitted
-                ? (textureReady
-                   ? "Diagnostic draw queued; RGBA8 mip texture ready for synthetic sampling"
-                   : "Diagnostic draw queued; texture allocation failed")
-                : "Metal initialized; diagnostic draw frame failed"
+                ? "Synthetic texture upload queued for Metal frame consumption"
+                : "Metal initialized; diagnostic texture frame failed"
         }
 
         // The Direct3D pipeline key is translated once per unique blend/mask
@@ -306,7 +290,10 @@ struct MetalSurfaceView: UIViewRepresentable {
                         stagedVertices = buffer
                         stagedVertexCount = count
                         stagedCalls = Array(calls.prefix(callCount))
-                        diagnosticTexturedFrame = syntheticTexturePending
+                        diagnosticTexturedFrame = syntheticTexturePending &&
+                            textureBytes > 0 &&
+                            stagedCalls.contains { $0.texture_id != 0 &&
+                                textureStore?.texture(id: $0.texture_id) != nil }
                         syntheticTexturePending = false
                         view.clearColor = MTLClearColor(red: Double(color[0]), green: Double(color[1]),
                                                       blue: Double(color[2]), alpha: Double(color[3]))
@@ -314,7 +301,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                             hasReceivedDraw = true
                             DispatchQueue.main.async { [weak self] in
                                 self?.status.wrappedValue = self?.diagnosticTexturedFrame == true
-                                    ? "Synthetic CMD_DRAW: recorded UV0 and sampled RGBA8 texture"
+                                    ? "Synthetic CMD_DRAW: queued RGBA8 upload decoded and bound to Metal"
                                     : "Diagnostic CMD_DRAW: transformed positions and diffuse colors"
                             }
                         }
@@ -329,9 +316,9 @@ struct MetalSurfaceView: UIViewRepresentable {
             }
             if let stagedVertices, stagedVertexCount > 0,
                !stagedCalls.isEmpty {
-                // Texture selection is now per draw, never per frame. The only
-                // resident texture today is synthetic ID 1; game uploads are
-                // not yet consumed from the recorded command stream.
+                // Texture selection is per draw. The diagnostic texture is
+                // now uploaded from CMD_UPLOAD_TEX in the queued frame, not
+                // pre-populated directly by the Swift initialization path.
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
                 encoder.setFrontFacing(.clockwise)
                 for call in stagedCalls {
