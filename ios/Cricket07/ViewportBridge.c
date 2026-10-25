@@ -73,8 +73,8 @@ int cricket07_resolve_draw_state(const CmdDraw *draw, Cricket07DrawState *out) {
 /* Stage-0 D3DTOP_MODULATE only: texture * diffuse/current.
  * Direct3D argument 2 is TEXTURE; 0 and 1 are DIFFUSE/CURRENT.
  * This deliberately does not attempt general fixed-function emulation.
- * Sampler key 0 maps to nearest filtering and clamp in the reference
- * WebGPU executor. Missing/unsupported stages must not be misrendered. */
+ * Sampler key 432 (D3DTADDRESS_CLAMP for U/V, nearest filtering,
+ * mip disabled) matches the Metal diagnostic sampler. Missing/unsupported stages must not be misrendered. */
 int cricket07_resolve_texture_binding(const CmdDraw *draw, uint32_t *texture_id) {
     if (!draw || !texture_id) return 0;
     *texture_id = 0;
@@ -84,7 +84,7 @@ int cricket07_resolve_texture_binding(const CmdDraw *draw, uint32_t *texture_id)
     if (draw->slot_kind[0] != TS_TEX || !draw->slot_id[0] ||
         draw->pixel_shader || draw->u.flags[1] ||
         draw->u.flags[2] || draw->u.flags[3] ||
-        draw->samp_key[0] != 0 || draw->u.st1[0] != 1 ||
+        draw->samp_key[0] != 432u || draw->u.st1[0] != 1 ||
         draw->u.st0[0] != 4 || draw->u.st0[1] != 2 ||
         (draw->u.st0[2] != 0 && draw->u.st0[2] != 1) ||
         draw->u.st0[3] != 4 || draw->u.st0b[0] != 2 ||
