@@ -5,6 +5,8 @@ on:
     paths:
       - 'ios/Cricket07/DrawFrameConsumer.c'
       - 'ios/Cricket07/TriangleStaging.c'
+      - 'ios/Cricket07/VertexTransform.c'
+      - 'ios/Cricket07/VertexTransform.h'
       - 'ios/Cricket07/FrameQueue.c'
       - 'ios/Cricket07/RuntimeBridge.h'
       - 'tests/ios_draw_frame_consumer_test.c'
@@ -23,7 +25,7 @@ jobs:
           set -euo pipefail
           clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
             ios/Cricket07/DrawFrameConsumer.c \
-            ios/Cricket07/TriangleStaging.c ios/Cricket07/FrameQueue.c \
+            ios/Cricket07/TriangleStaging.c ios/Cricket07/VertexTransform.c ios/Cricket07/FrameQueue.c \
             tests/ios_draw_frame_consumer_test.c \
             -o "$RUNNER_TEMP/draw-frame-tests"
           "$RUNNER_TEMP/draw-frame-tests"
@@ -32,9 +34,9 @@ jobs:
         run: |
           set -euo pipefail
           SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          for file in DrawFrameConsumer TriangleStaging FrameQueue; do
+          for file in DrawFrameConsumer TriangleStaging VertexTransform FrameQueue; do
             xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
               -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
               -c "ios/Cricket07/$file.c" -o "$RUNNER_TEMP/$file.o"
           done
-          echo "Synthetic complete draw frame decoded; no game engine or assets included." >> "$GITHUB_STEP_SUMMARY"
+          echo "Synthetic CMD_DRAW transforms decoded and tested; no game engine or assets included." >> "$GITHUB_STEP_SUMMARY"
