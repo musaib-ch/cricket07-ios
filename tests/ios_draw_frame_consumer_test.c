@@ -121,6 +121,80 @@ int main(void) {
     assert(cricket07_take_triangle_frame(NULL, 4, xyzw, 12, &count, &frame) == 0);
     assert(cricket07_take_triangle_frame(rgba, 3, xyzw, 12, &count, &frame) == 0);
     cricket07_frame_queue_reset();
+    /* Real recorder texture commands must be copied out of a validated
+     * frame before Metal consumes its draw calls. The payload is synthetic. */
+    {
+        unsigned char base[4096] = {0}, stream[4096] = {0};
+        unsigned char upload[256] = {0}, extracted[256] = {0};
+        size_t upload_size = 0, extracted_size = 0;
+        float colors[12] = {0}, uv[6] = {0};
+        Cricket07DrawCall textured_calls[2] = {0};
+        size_t textured_call_count = 0;
+        assert(cricket07_submit_test_triangle_frame() == 1);
+        size_t base_size = cricket07_frame_queue_take(base, sizeof base);
+        assert(base_size > sizeof(CmdPresent));
+        assert(cricket07_make_test_texture_upload(upload, sizeof upload, &upload_size) == 1);
+        assert(upload_size + base_size < sizeof stream);
+        memcpy(stream, upload, upload_size);
+        memcpy(stream + upload_size, base, base_size);
+        assert(cricket07_frame_queue_publish(stream, upload_size + base_size) == 1);
+        assert(cricket07_take_colored_uv_texture_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_call_count, 1280, 960,
+            extracted, sizeof extracted, &extracted_size) == 1);
+        assert(count == 3 && frame == 7 && textured_call_count == 1);
+        assert(textured_calls[0].texture_id == 1);
+        assert(extracted_size == upload_size);
+        assert(memcmp(extracted, upload, upload_size) == 0);
+        Cricket07TextureUpload decoded = {0};
+        assert(cricket07_decode_texture_upload(extracted, extracted_size, &decoded) == 1);
+        assert(decoded.texture_id == 1 && decoded.levels == 2);
+        assert(fabsf(uv[1] - 1.0f) < 0.0001f);
+
+        /* Insufficient texture output capacity fails closed. */
+        assert(cricket07_frame_queue_publish(stream, upload_size + base_size) == 1);
+        assert(cricket07_take_colored_uv_texture_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_call_count, 1280, 960,
+            extracted, upload_size - 1, &extracted_size) == 0);
+
+        /* A malformed mip chain must never be handed to Metal. */
+        memset(stream + 12, 0, 4); /* CMD_UPLOAD_TEX.levels */
+        assert(cricket07_frame_queue_publish(stream, upload_size + base_size) == 1);
+        assert(cricket07_take_colored_uv_texture_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_call_count, 1280, 960,
+            extracted, sizeof extracted, &extracted_size) == 0);
+
+        /* Destroy commands are preserved, but only before any draw. */
+        memcpy(stream, upload, upload_size);
+        CmdDestroy destroy = {0};
+        destroy.h.type = CMD_DESTROY_TEX;
+        destroy.h.size = (uint32_t)((sizeof destroy + 7u) & ~(size_t)7u);
+        destroy.id = 9;
+        unsigned char padded_destroy[16] = {0};
+        memcpy(padded_destroy, &destroy, sizeof destroy);
+        memcpy(stream + upload_size, padded_destroy, sizeof padded_destroy);
+        memcpy(stream + upload_size + sizeof padded_destroy, base, base_size);
+        assert(cricket07_frame_queue_publish(stream, upload_size + sizeof padded_destroy + base_size) == 1);
+        assert(cricket07_take_colored_uv_texture_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_call_count, 1280, 960,
+            extracted, sizeof extracted, &extracted_size) == 1);
+        assert(extracted_size == upload_size + sizeof padded_destroy);
+        assert(memcmp(extracted + upload_size, padded_destroy, sizeof padded_destroy) == 0);
+
+        /* An upload after a draw would change per-draw ordering: reject it. */
+        memcpy(stream, base, base_size - sizeof(CmdPresent));
+        memcpy(stream + base_size - sizeof(CmdPresent), upload, upload_size);
+        memcpy(stream + base_size - sizeof(CmdPresent) + upload_size,
+               base + base_size - sizeof(CmdPresent), sizeof(CmdPresent));
+        assert(cricket07_frame_queue_publish(stream, base_size + upload_size) == 1);
+        assert(cricket07_take_colored_uv_texture_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_call_count, 1280, 960,
+            extracted, sizeof extracted, &extracted_size) == 0);
+    }
     puts("iOS draw frame consumer regression passed");
     return 0;
 }
