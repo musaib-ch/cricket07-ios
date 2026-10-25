@@ -2,6 +2,7 @@
 #define CRICKET07_RUNTIME_BRIDGE_H
 #include <stddef.h>
 #include "ViewportBridge.h"
+#include "TextureUploadBridge.h"
 /// Returns 1 when the linked C runtime function registry passes a deterministic smoke test.
 /// Does not allocate the 4 GiB guest address space or execute Cricket 07.
 int cricket07_runtime_linked(void);
