@@ -4,6 +4,8 @@ on:
     branches: [feature/ios-native-foundation]
     paths:
       - 'ios/Cricket07/DrawFrameConsumer.c'
+      - 'ios/Cricket07/TextureUploadBridge.c'
+      - 'ios/Cricket07/TextureUploadBridge.h'
       - 'ios/Cricket07/TriangleStaging.c'
       - 'ios/Cricket07/VertexTransform.c'
       - 'ios/Cricket07/VertexTransform.h'
@@ -27,14 +29,14 @@ jobs:
         run: |
           set -euo pipefail
           clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
-            ios/Cricket07/DrawFrameConsumer.c \
+            ios/Cricket07/DrawFrameConsumer.c ios/Cricket07/TextureUploadBridge.c \
             ios/Cricket07/TriangleStaging.c ios/Cricket07/VertexTransform.c \
             ios/Cricket07/ViewportBridge.c ios/Cricket07/FrameQueue.c \
             tests/ios_draw_frame_consumer_test.c \
             -o "$RUNNER_TEMP/draw-frame-tests"
           "$RUNNER_TEMP/draw-frame-tests"
           clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
-            ios/Cricket07/DrawFrameConsumer.c \
+            ios/Cricket07/DrawFrameConsumer.c ios/Cricket07/TextureUploadBridge.c \
             ios/Cricket07/TriangleStaging.c ios/Cricket07/VertexTransform.c \
             ios/Cricket07/ViewportBridge.c ios/Cricket07/FrameQueue.c \
             tests/ios_multi_viewport_test.c \
@@ -45,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          for file in DrawFrameConsumer TriangleStaging VertexTransform ViewportBridge FrameQueue; do
+          for file in DrawFrameConsumer TextureUploadBridge TriangleStaging VertexTransform ViewportBridge FrameQueue; do
             xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
               -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
               -c "ios/Cricket07/$file.c" -o "$RUNNER_TEMP/$file.o"
