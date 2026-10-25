@@ -2,7 +2,12 @@ name: Native iOS app shell
 on:
   push:
     branches: [feature/ios-native-foundation]
-    paths: ['ios/**', '.github/workflows/ios-app-shell.yml']
+    paths:
+      - 'ios/**'
+      - 'runtime/**'
+      - 'host/render_cmd.h'
+      - 'host/render_rec.c'
+      - '.github/workflows/ios-app-shell.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,6 +28,24 @@ jobs:
           set -euo pipefail
           if [ "${{ matrix.sdk }}" = "iphoneos" ]; then DEST="generic/platform=iOS"; else DEST="generic/platform=iOS Simulator"; fi
           xcodebuild -project ios/Cricket07Foundation.xcodeproj -scheme Cricket07Foundation -sdk "${{ matrix.sdk }}" -destination "$DEST" -derivedDataPath "$RUNNER_TEMP/Derived" CODE_SIGNING_ALLOWED=NO build
+      - name: Assert diagnostic app contains the native graphics bridge
+        if: matrix.sdk == 'iphoneos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Derived/Build/Products/Debug-iphoneos/Cricket07Foundation.app"
+          EXE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          test -f "$APP/$EXE"
+          file "$APP/$EXE" | grep -q 'Mach-O'
+          xcrun nm "$APP/$EXE" | grep -q 'cricket07_take_triangle_frame' || {
+            echo 'Required graphics consumer symbol not linked' >&2
+            exit 1
+          }
+          test -f "$APP/default.metallib" || {
+            echo 'Metal shader library missing from app' >&2
+            exit 1
+          }
+          echo "Native graphics symbols and compiled Metal shaders are packaged. Gameplay is NOT integrated." >> "$GITHUB_STEP_SUMMARY"
       - name: Package unsigned diagnostic IPA
         if: matrix.sdk == 'iphoneos'
         shell: bash
