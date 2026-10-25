@@ -241,7 +241,7 @@ int cricket07_take_colored_viewport_triangle_frame(
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
                                     vertex_count, frame_number, 1, calls, call_capacity,
                                     call_count, target_width, target_height,
-                                    diffuse_rgba, diffuse_float_capacity, NULL, 0);
+                                    diffuse_rgba, diffuse_float_capacity, NULL, 0, NULL, 0, NULL);
 }
 
 /* Optional UV0 path. Read CVert.tc[0].xy verbatim from the recorded draw,
