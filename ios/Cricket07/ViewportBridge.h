@@ -11,6 +11,13 @@ typedef struct {
     double x, y, width, height, min_depth, max_depth;
 } Cricket07Viewport;
 
+/* A draw range and its own viewport. A flattened vertex buffer alone cannot
+ * represent different viewport states for consecutive CMD_DRAW commands. */
+typedef struct {
+    Cricket07Viewport viewport;
+    uint32_t first_vertex, vertex_count;
+} Cricket07DrawCall;
+
 int cricket07_resolve_viewport(const CmdDraw *draw,
                               uint32_t target_width, uint32_t target_height,
                               uint32_t logical_width, uint32_t logical_height,
