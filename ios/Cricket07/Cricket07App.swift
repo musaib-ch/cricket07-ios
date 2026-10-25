@@ -18,6 +18,7 @@ struct FoundationView: View {
     @State private var cpuProbeResult = "Not tested"
     @State private var metalStatus = "Not initialized"
     private let bridge = ControllerBridge()
+    @State private var touchEvents = 0
     var body: some View {
         VStack(spacing: 18) {
             Text("Cricket 07 • iOS Foundation").font(.title.bold())
@@ -50,6 +51,12 @@ struct FoundationView: View {
                 .frame(height: 100)
                 .cornerRadius(10)
             GameFilesImportView()
+            TouchGamepadView { key, pressed in
+                if cricket07_controller_enqueue_vk(key, pressed ? 1 : 0) == 1 {
+                    touchEvents += 1
+                }
+            }
+            Text("Touch events queued: \(touchEvents)")
             Text(controllerConnected ? "Controller connected" : "Connect a Bluetooth controller")
             Text("Controller key events received: \(eventCount)")
                 .monospacedDigit()
