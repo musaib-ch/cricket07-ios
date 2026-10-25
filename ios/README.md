@@ -42,3 +42,9 @@ ControllerBridge.swift queues virtual-key transitions and FoundationView forward
 ## Game-thread controller dispatch (diagnostic adapter)
 - `ControllerInputPump.c` provides `cricket07_controller_pump(sink, context, budget)` to drain up to 32 HID transitions per invocation and invoke a caller-provided callback outside the queue mutex. A translated host input-thread callback should forward each transition to `input_key_hid(usage, pressed)`; calling it from a Swift controller callback or the Metal render thread would be incorrect.
 - `ios-controller-input-pump.yml` tests FIFO order, bounded consumption, cross-thread dispatch, reentrant enqueue and key releases with a stub sink. The current SwiftUI diagnostic shell **does not call this pump** and does not execute the translated game. This is an integration seam, not verified DirectInput gameplay.
+
+## DirectInput adapter (not yet linked to gameplay)
+- `ios/engine/ControllerDirectInputAdapter.c` implements `cricket07_controller_pump_directinput(budget)`, forwarding the existing bounded HID queue to the real `host/input.c:input_key_hid()` symbol. There is deliberately no fallback implementation.
+- `ios-controller-directinput-adapter.yml` compiles the queue, pump, adapter and a strict link-time `input_key_hid` stub. It verifies FIFO transitions, 32-event maximum, game-thread callback execution, empty-queue behavior and release-on-reset.
+- The adapter is outside the diagnostic Xcode source target so that it cannot introduce an unresolved `input_key_hid` symbol into the IPA. When a translated game executable and host input system are linked, add this source to the game target and invoke it **only on the game input thread** at a defined event-loop checkpoint.
+- Passing these tests does not demonstrate a running engine, DirectInput gameplay, or device controller compatibility.
