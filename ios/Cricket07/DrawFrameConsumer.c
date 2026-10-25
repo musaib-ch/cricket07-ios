@@ -91,6 +91,9 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                                                 &call.viewport)) {
                     ok = 0; break;
                 }
+                if (!cricket07_resolve_draw_state(&draw, &call.state)) {
+                    ok = 0; break;
+                }
                 call.first_vertex = (uint32_t)vertices;
                 call.vertex_count = (uint32_t)added;
                 calls[n_calls++] = call;
