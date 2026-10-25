@@ -23,3 +23,18 @@ Still needed: user-owned translated game functions and files, an iOS-safe
 engine bootstrap that does not call the desktop `main()`/SDL path,
 startup/lifecycle and file-system adapters, complete Direct3D compatibility,
 and physical iPhone gameplay tests. Do not package proprietary assets.
+
+## Shared SDL-free startup preparation
+
+The desktop launcher now calls `host_register_import_handlers()` instead of
+assembling the six Windows/DirectX import tables inline. The new shared
+`host/import_registry.c` module validates the complete table count against
+its 1024-entry bound and rejects missing lists **before** installing any
+handlers. The iOS engine archive includes the same implementation, making
+the import-registration step reusable from a future native startup thread
+without invoking `main()`, SDL, or the game.
+
+`ios-engine-import-registry.yml` tests ordering, idempotent re-registration,
+oversized tables, and missing table pointers. This is a startup prerequisite,
+not an engine launch: image loading, guest memory initialization, generated
+function registration, iOS file-system setup and lifecycle remain unconnected.

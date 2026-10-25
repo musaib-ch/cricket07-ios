@@ -1,0 +1,35 @@
+name: iOS shared host import registration
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'host/import_registry.*'
+      - 'host/main.c'
+      - 'ios/tests/ios_import_registry_test.c'
+      - '.github/workflows/ios-engine-import-registry.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import-registry:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate import table ordering and reject malformed or overflowing tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in valid overflow null; do
+            flags=()
+            if [ "$mode" = overflow ]; then flags=(-DTEST_OVERFLOW); fi
+            if [ "$mode" = null ]; then flags=(-DTEST_NULL_TABLE); fi
+            clang -std=gnu11 -Wall -Wextra -Werror "${flags[@]}" \
+              -Iruntime -Ihost host/import_registry.c \
+              ios/tests/ios_import_registry_test.c \
+              -o "$RUNNER_TEMP/import-$mode"
+            "$RUNNER_TEMP/import-$mode"
+          done

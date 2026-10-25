@@ -40,7 +40,7 @@ jobs:
           mkdir -p "$OUT/objects"
           SOURCES=(
             runtime/runtime.c runtime/interp.c
-            host/com.c host/core.c host/d3d8.c host/dinput.c host/dsound.c
+            host/com.c host/core.c host/import_registry.c host/d3d8.c host/dinput.c host/dsound.c
             host/input.c host/kernel32.c host/main.c host/misc.c host/pshader.c
             host/render_rec.c host/texconv.c host/user32.c host/vshader.c
             host/watch.c host/web.c
@@ -62,6 +62,10 @@ jobs:
           done
           # Verify the actual Present object references the adapter, and that
           # the adapter and its real DirectInput sink are defined in this archive.
+          xcrun nm -u "$OUT/objects/host_main.c.o" > "$OUT/launcher-undefined.txt"
+          xcrun nm -g "$OUT/objects/host_import_registry.c.o" > "$OUT/import-registry-symbols.txt"
+          grep -Fq '_host_register_import_handlers' "$OUT/launcher-undefined.txt"
+          grep -Fq '_host_register_import_handlers' "$OUT/import-registry-symbols.txt"
           xcrun nm -u "$OUT/objects/host_d3d8.c.o" > "$OUT/present-undefined.txt"
           xcrun nm -g "$OUT/objects/ios_engine_ControllerDirectInputAdapter.c.o" > "$OUT/adapter-symbols.txt"
           xcrun nm -g "$OUT/objects/host_input.c.o" > "$OUT/input-symbols.txt"

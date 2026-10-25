@@ -12,6 +12,7 @@
  */
 #include "win32.h"
 #include "render.h"
+#include "import_registry.h"
 
 #include <limits.h>
 #include <pthread.h>
@@ -75,13 +76,9 @@ int main(int argc, char **argv) {
     extern int g_log_d3d;
     g_log_d3d = getenv("RC_LOG_D3D") ? atoi(getenv("RC_LOG_D3D")) : 0;
 
-    static ImportHandler all[1024];
-    uint32_t n = 0;
-    const ImportTable *tables[] = { &kernel32_imports, &user32_imports, &gdi32_imports, &advapi32_imports,
-                                    &winmm_imports, &directx_imports };
-    for (size_t t = 0; t < sizeof tables / sizeof tables[0]; t++)
-        for (uint32_t i = 0; i < tables[t]->count; i++) all[n++] = tables[t]->list[i];
-    set_import_handlers(all, n);
+    /* Shared with the future iOS bootstrap, without starting SDL. */
+    uint32_t n = host_register_import_handlers();
+    if (!n) { fprintf(stderr, "failed to register Windows import handlers\n"); return 1; }
 
     runtime_init(&g_cpu);
     char exe[1100];
