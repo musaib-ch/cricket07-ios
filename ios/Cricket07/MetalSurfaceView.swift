@@ -39,7 +39,9 @@ struct MetalSurfaceView: UIViewRepresentable {
 
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
-        private var testPipeline: MTLRenderPipelineState?
+        private var pipelineStates: [UInt64: MTLRenderPipelineState] = [:]
+        private var vertexShader: MTLFunction?
+        private var fragmentShader: MTLFunction?
         private var depthStates: [UInt32: MTLDepthStencilState] = [:]
         private var stagedVertices: MTLBuffer?
         private var stagedVertexCount = 0
@@ -55,15 +57,9 @@ struct MetalSurfaceView: UIViewRepresentable {
                 return
             }
             self.queue = queue
-            if let library = device.makeDefaultLibrary(),
-               let vertex = library.makeFunction(name: "cricket07_staged_vertex"),
-               let fragment = library.makeFunction(name: "cricket07_test_fragment") {
-                let descriptor = MTLRenderPipelineDescriptor()
-                descriptor.vertexFunction = vertex
-                descriptor.fragmentFunction = fragment
-                descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
-                descriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
-                testPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
+            if let library = device.makeDefaultLibrary() {
+                vertexShader = library.makeFunction(name: "cricket07_staged_vertex")
+                fragmentShader = library.makeFunction(name: "cricket07_test_fragment")
             }
             // Queue a complete synthetic draw frame. Only the supported
             // diagnostic command subset is consumed by this Metal view.
@@ -71,6 +67,82 @@ struct MetalSurfaceView: UIViewRepresentable {
             status.wrappedValue = submitted
                 ? "Metal initialized; diagnostic draw frame queued"
                 : "Metal initialized; diagnostic draw frame failed"
+        }
+
+        // The Direct3D pipeline key is translated once per unique blend/mask
+        // combination. These are immutable Metal pipeline properties, not
+        // dynamic encoder state. Unsupported D3D modes are rejected in C.
+        private func blendFactor(_ value: UInt32) -> MTLBlendFactor? {
+            switch value {
+            case 1: return .zero
+            case 2: return .one
+            case 3: return .sourceColor
+            case 4: return .oneMinusSourceColor
+            case 5: return .sourceAlpha
+            case 6: return .oneMinusSourceAlpha
+            case 7: return .destinationAlpha
+            case 8: return .oneMinusDestinationAlpha
+            case 9: return .destinationColor
+            case 10: return .oneMinusDestinationColor
+            case 11: return .sourceAlphaSaturated
+            default: return nil
+            }
+        }
+
+        private func blendOperation(_ value: UInt32) -> MTLBlendOperation? {
+            switch value {
+            case 1: return .add
+            case 2: return .subtract
+            case 3: return .reverseSubtract
+            case 4: return .min
+            case 5: return .max
+            default: return nil
+            }
+        }
+
+        private func pipeline(for state: Cricket07DrawState,
+                              view: MTKView) -> MTLRenderPipelineState? {
+            let key = UInt64(state.color_write_mask)
+                | (UInt64(state.blend) << 4)
+                | (UInt64(state.src_blend) << 5)
+                | (UInt64(state.dst_blend) << 9)
+                | (UInt64(state.blend_op) << 13)
+            if let cached = pipelineStates[key] { return cached }
+            guard let device = view.device, let vertexShader, let fragmentShader else {
+                return nil
+            }
+            let descriptor = MTLRenderPipelineDescriptor()
+            descriptor.vertexFunction = vertexShader
+            descriptor.fragmentFunction = fragmentShader
+            descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
+            descriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
+            guard let attachment = descriptor.colorAttachments[0] else { return nil }
+            var mask: MTLColorWriteMask = []
+            if state.color_write_mask & 1 != 0 { mask.insert(.red) }
+            if state.color_write_mask & 2 != 0 { mask.insert(.green) }
+            if state.color_write_mask & 4 != 0 { mask.insert(.blue) }
+            if state.color_write_mask & 8 != 0 { mask.insert(.alpha) }
+            attachment.writeMask = mask
+            if state.blend != 0 {
+                guard let src = blendFactor(state.src_blend),
+                      let dst = blendFactor(state.dst_blend),
+                      let op = blendOperation(state.blend_op) else { return nil }
+                attachment.isBlendingEnabled = true
+                attachment.sourceRGBBlendFactor = src
+                attachment.destinationRGBBlendFactor = dst
+                attachment.rgbBlendOperation = op
+                // D3D8 uses the same blend factors and operation for alpha.
+                // Source-alpha-saturate contributes ONE to source alpha.
+                attachment.sourceAlphaBlendFactor =
+                    state.src_blend == 11 ? .one : src
+                attachment.destinationAlphaBlendFactor = dst
+                attachment.alphaBlendOperation = op
+            }
+            guard let result = try? device.makeRenderPipelineState(descriptor: descriptor) else {
+                return nil
+            }
+            pipelineStates[key] = result
+            return result
         }
 
         // Cache immutable Metal depth states. Direct3D compare values are
@@ -155,16 +227,17 @@ struct MetalSurfaceView: UIViewRepresentable {
                   let encoder = command.makeRenderCommandEncoder(descriptor: descriptor) else {
                 return
             }
-            if let testPipeline, let stagedVertices, stagedVertexCount > 0,
+            if let stagedVertices, stagedVertexCount > 0,
                !stagedCalls.isEmpty {
-                encoder.setRenderPipelineState(testPipeline)
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
                 encoder.setFrontFacing(.clockwise)
                 for call in stagedCalls {
                     guard let device = view.device,
-                          let depthState = depthState(for: call.state, device: device) else {
+                          let depthState = depthState(for: call.state, device: device),
+                          let drawPipeline = pipeline(for: call.state, view: view) else {
                         continue
                     }
+                    encoder.setRenderPipelineState(drawPipeline)
                     encoder.setDepthStencilState(depthState)
                     switch call.state.cull_mode {
                     case 1: encoder.setCullMode(.front)

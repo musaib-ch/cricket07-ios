@@ -30,6 +30,11 @@ int main(void) {
         draw.key.zwrite = i ? 1u : 0u;
         draw.key.zfunc = i ? 5u : 0u;
         draw.key.cull = i ? 3u : 2u;
+        draw.key.cmask = i ? 0xAu : 0xFu;
+        draw.key.blend = i ? 1u : 0u;
+        draw.key.src = i ? 5u : 0u;
+        draw.key.dst = i ? 6u : 0u;
+        draw.key.op = i ? 1u : 0u;
         draw.u.flags[0] = 2;
         draw.u.vp[2] = 640; draw.u.vp[3] = 480;
         draw.maxz = 1;
@@ -67,8 +72,13 @@ int main(void) {
     assert(fabs(calls[0].viewport.height - 960.) < 0.001);
     assert(calls[0].state.depth_compare == 8 && calls[0].state.depth_write == 0);
     assert(calls[0].state.cull_mode == 1);
+    assert(calls[0].state.color_write_mask == 15 && calls[0].state.blend == 0);
+    assert(calls[0].state.src_blend == 2 && calls[0].state.dst_blend == 1);
     assert(calls[1].state.depth_compare == 5 && calls[1].state.depth_write == 1);
     assert(calls[1].state.cull_mode == 2);
+    assert(calls[1].state.color_write_mask == 10 && calls[1].state.blend == 1);
+    assert(calls[1].state.src_blend == 5 && calls[1].state.dst_blend == 6);
+    assert(calls[1].state.blend_op == 1);
     assert(fabs(xyzw[0] - (-0.5f + 1.f / 640.f)) < 0.001);
 
     /* Reject a second draw when the metadata array can hold only one. */
@@ -95,6 +105,21 @@ int main(void) {
     invalid.key.cull = 1u;
     assert(cricket07_resolve_draw_state(&invalid, &state));
     assert(state.cull_mode == 0 && state.depth_compare == 4);
+    invalid.key.cmask = 16u;
+    assert(!cricket07_resolve_draw_state(&invalid, &state));
+    invalid.key.cmask = 15u;
+    invalid.key.blend = 1u;
+    invalid.key.src = 14u;
+    assert(!cricket07_resolve_draw_state(&invalid, &state));
+    invalid.key.src = 5u;
+    invalid.key.dst = 11u; /* source-alpha-saturate is not a destination factor */
+    assert(!cricket07_resolve_draw_state(&invalid, &state));
+    invalid.key.dst = 6u;
+    invalid.key.op = 6u;
+    assert(!cricket07_resolve_draw_state(&invalid, &state));
+    invalid.key.op = 5u;
+    assert(cricket07_resolve_draw_state(&invalid, &state));
+    assert(state.blend == 1 && state.blend_op == 5);
 
     cricket07_frame_queue_reset();
     puts("iOS multi-viewport draw regression passed");

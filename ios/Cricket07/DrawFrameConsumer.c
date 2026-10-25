@@ -175,6 +175,7 @@ int cricket07_submit_test_triangle_frame(void) {
     draw.h.type = CMD_DRAW;
     draw.h.size = (uint32_t)draw_size;
     draw.key.topo = 4u;  /* WGPU triangle-list topology */
+    draw.key.cmask = 15u; /* write all RGBA channels */
     draw.nverts = 3u;
     draw.vp[2] = 640.0f; draw.vp[3] = 480.0f;
     draw.maxz = 1.0f;

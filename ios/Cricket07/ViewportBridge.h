@@ -18,6 +18,8 @@ typedef struct {
  */
 typedef struct {
     uint32_t depth_compare, depth_write, cull_mode;
+    /* PKey blend and color mask, normalized for per-draw Metal pipelines. */
+    uint32_t blend, src_blend, dst_blend, blend_op, color_write_mask;
 } Cricket07DrawState;
 
 typedef struct {

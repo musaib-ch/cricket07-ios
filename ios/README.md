@@ -17,7 +17,7 @@ This directory is an initial iOS controller and architecture foundation, **not a
 - The legacy `cricket07_take_triangle_frame` remains available for raw staging and regression tests.
 - Unsupported or malformed transforms are rejected rather than rendered as raw clip coordinates. A synthetic mode-2 draw validates half-pixel correction; no live game producer is connected.
 - Tests run through `ios-draw-frame-consumer.yml`; `ios-app-shell.yml` compiles and packages the unsigned diagnostic app for iPhone and Simulator.
-- Rendering still lacks production texture sampling, per-draw blend/depth/cull state, non-backbuffer render targets, game-generated commands, and device gameplay verification. The diagnostic depth state is fixed, and viewport handling alone is not sufficient for game rendering.
+- The diagnostic Metal renderer now translates per-draw depth comparison/write, culling, RGBA write masks and a bounded set of D3D8 blend factors/operations into cached Metal pipeline states. Unsupported values fail validation. Production texture sampling, alpha testing, non-backbuffer render targets, game-generated commands, and device gameplay verification remain outstanding.
 
 ## Critical blockers
 1. Existing build.sh targets macOS and uses Cocoa, IOKit, SDL2, and desktop wgpu libraries.
