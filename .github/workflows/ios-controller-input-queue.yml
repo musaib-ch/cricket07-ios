@@ -1,0 +1,23 @@
+name: iOS controller HID queue regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/ControllerInputQueue.*'
+      - 'ios/tests/controller_input_queue_test.c'
+      - '.github/workflows/ios-controller-input-queue.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and exercise native controller queue
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -pthread \
+            -Iios/Cricket07 ios/Cricket07/ControllerInputQueue.c \
+            ios/tests/controller_input_queue_test.c -o /tmp/cricket07-input-test
+          /tmp/cricket07-input-test
