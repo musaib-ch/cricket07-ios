@@ -60,6 +60,19 @@ int cricket07_take_colored_uv_viewport_triangle_frame(
     size_t *vertex_count, unsigned int *frame_number,
     Cricket07DrawCall *calls, size_t call_capacity, size_t *call_count,
     uint32_t target_width, uint32_t target_height);
+/// Consume a validated draw frame with complete CMD_UPLOAD_TEX and
+/// CMD_DESTROY_TEX commands copied into caller-owned storage. Texture
+/// mutations must precede draws; all commands are validated before success.
+/// Apply returned operations before encoding the corresponding Metal draws.
+int cricket07_take_colored_uv_texture_frame(
+    float *rgba, size_t color_capacity,
+    float *xyzw, size_t vertex_float_capacity,
+    float *diffuse_rgba, size_t diffuse_float_capacity,
+    float *uv0, size_t uv_float_capacity,
+    size_t *vertex_count, unsigned int *frame_number,
+    Cricket07DrawCall *calls, size_t call_capacity, size_t *call_count,
+    uint32_t target_width, uint32_t target_height,
+    void *texture_commands, size_t texture_capacity, size_t *texture_length);
 /// Publish one synthetic CLEAR/DRAW/PRESENT frame through the actual native mailbox.
 int cricket07_submit_test_triangle_frame(void);
 #endif
