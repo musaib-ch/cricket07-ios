@@ -56,13 +56,23 @@ struct FoundationView: View {
         }
         .padding(30)
         .onAppear {
+            cricket07_controller_reset()
             bridge.start()
             controllerConnected = !GCController.controllers().isEmpty
         }
-        .onDisappear { bridge.stop() }
+        .onDisappear {
+            bridge.stop()
+            cricket07_controller_reset()
+        }
         .task {
             while !Task.isCancelled {
-                eventCount += bridge.drain().count
+                let events = bridge.drain()
+                // Keep controller callbacks off the translated game thread.
+                // The native queue stores HID events for a future engine pump.
+                for event in events {
+                    _ = cricket07_controller_enqueue_vk(event.virtualKey, event.pressed ? 1 : 0)
+                }
+                eventCount += events.count
                 controllerConnected = !GCController.controllers().isEmpty
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
