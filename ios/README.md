@@ -38,3 +38,7 @@ ControllerBridge.swift queues virtual-key transitions and FoundationView forward
 - Validate imported ZIP paths against traversal, symlinks and decompression bombs.
 - Avoid JIT and executable memory on iOS; translated code must be compiled ahead of time.
 - Treat game files as untrusted inputs and test parsers before enabling imports.
+
+## Game-thread controller dispatch (diagnostic adapter)
+- `ControllerInputPump.c` provides `cricket07_controller_pump(sink, context, budget)` to drain up to 32 HID transitions per invocation and invoke a caller-provided callback outside the queue mutex. A translated host input-thread callback should forward each transition to `input_key_hid(usage, pressed)`; calling it from a Swift controller callback or the Metal render thread would be incorrect.
+- `ios-controller-input-pump.yml` tests FIFO order, bounded consumption, cross-thread dispatch, reentrant enqueue and key releases with a stub sink. The current SwiftUI diagnostic shell **does not call this pump** and does not execute the translated game. This is an integration seam, not verified DirectInput gameplay.
