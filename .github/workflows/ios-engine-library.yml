@@ -6,6 +6,9 @@ on:
     paths:
       - 'runtime/**'
       - 'host/**'
+      - 'ios/Cricket07/ControllerInputQueue.*'
+      - 'ios/Cricket07/ControllerInputPump.*'
+      - 'ios/engine/ControllerDirectInputAdapter.*'
       - '.github/workflows/ios-engine-library.yml'
   workflow_dispatch:
 
@@ -40,16 +43,88 @@ jobs:
             host/input.c host/kernel32.c host/main.c host/misc.c host/pshader.c
             host/render_rec.c host/texconv.c host/user32.c host/vshader.c
             host/watch.c host/web.c
+            ios/Cricket07/ControllerInputQueue.c
+            ios/Cricket07/ControllerInputPump.c
+            ios/engine/ControllerDirectInputAdapter.c
           )
           for src in "${SOURCES[@]}"; do
             object="$OUT/objects/${src//\//_}.o"
             echo "::group::Compiling $src"
             xcrun clang -target "$TARGET" -isysroot "$SDKROOT" \
               -std=gnu11 -O1 -frounding-math -Wno-unused-function \
+              -DCRICKET07_IOS_GAME \
               -Iruntime -Ihost -c "$src" -o "$object"
             echo "::endgroup::"
             xcrun lipo -info "$object"
           done
+          # Verify the actual Present object references the adapter, and that
+          # the adapter and its real DirectInput sink are defined in this archive.
+          xcrun nm -u "$OUT/objects/host_d3d8.c.o" > "$OUT/present-undefined.txt"
+          xcrun nm -g "$OUT/objects/ios_engine_ControllerDirectInputAdapter.c.o" > "$OUT/adapter-symbols.txt"
+          xcrun nm -g "$OUT/objects/host_input.c.o" > "$OUT/input-symbols.txt"
+          grep -Eq ' _cricket07_controller_pump_directinput          xcrun lipo -info "$OUT/libcricket07host.a"
+          xcrun ar -t "$OUT/libcricket07host.a" > "$OUT/objects.txt"
+          cp "$OUT/libcricket07host.a" "libcricket07host-$SDK.a"
+          cp "$OUT/objects.txt" "libcricket07host-$SDK-objects.txt"
+          {
+            echo "## Native engine static archive ($SDK)"
+            echo "Compiled ${#SOURCES[@]} C translation units for $TARGET."
+            echo "Archive: libcricket07host-$SDK.a"
+            echo
+            echo "This is an unlinked intermediate library, NOT a playable engine or IPA."
+            echo "Still missing: generated Cricket 07 game functions, iOS Metal/wgpu rendering, iOS window integration, game assets, and final app linkage."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cricket07-engine-library-${{ matrix.sdk }}
+          path: |
+            libcricket07host-${{ matrix.sdk }}.a
+            libcricket07host-${{ matrix.sdk }}-objects.txt
+          if-no-files-found: error
+          retention-days: 14
+ "$OUT/present-undefined.txt"
+          grep -Eq ' [Tt] _cricket07_controller_pump_directinput          xcrun lipo -info "$OUT/libcricket07host.a"
+          xcrun ar -t "$OUT/libcricket07host.a" > "$OUT/objects.txt"
+          cp "$OUT/libcricket07host.a" "libcricket07host-$SDK.a"
+          cp "$OUT/objects.txt" "libcricket07host-$SDK-objects.txt"
+          {
+            echo "## Native engine static archive ($SDK)"
+            echo "Compiled ${#SOURCES[@]} C translation units for $TARGET."
+            echo "Archive: libcricket07host-$SDK.a"
+            echo
+            echo "This is an unlinked intermediate library, NOT a playable engine or IPA."
+            echo "Still missing: generated Cricket 07 game functions, iOS Metal/wgpu rendering, iOS window integration, game assets, and final app linkage."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cricket07-engine-library-${{ matrix.sdk }}
+          path: |
+            libcricket07host-${{ matrix.sdk }}.a
+            libcricket07host-${{ matrix.sdk }}-objects.txt
+          if-no-files-found: error
+          retention-days: 14
+ "$OUT/adapter-symbols.txt"
+          grep -Eq ' [Tt] _input_key_hid          xcrun lipo -info "$OUT/libcricket07host.a"
+          xcrun ar -t "$OUT/libcricket07host.a" > "$OUT/objects.txt"
+          cp "$OUT/libcricket07host.a" "libcricket07host-$SDK.a"
+          cp "$OUT/objects.txt" "libcricket07host-$SDK-objects.txt"
+          {
+            echo "## Native engine static archive ($SDK)"
+            echo "Compiled ${#SOURCES[@]} C translation units for $TARGET."
+            echo "Archive: libcricket07host-$SDK.a"
+            echo
+            echo "This is an unlinked intermediate library, NOT a playable engine or IPA."
+            echo "Still missing: generated Cricket 07 game functions, iOS Metal/wgpu rendering, iOS window integration, game assets, and final app linkage."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cricket07-engine-library-${{ matrix.sdk }}
+          path: |
+            libcricket07host-${{ matrix.sdk }}.a
+            libcricket07host-${{ matrix.sdk }}-objects.txt
+          if-no-files-found: error
+          retention-days: 14
+ "$OUT/input-symbols.txt"
           xcrun libtool -static -o "$OUT/libcricket07host.a" "$OUT"/objects/*.o
           xcrun lipo -info "$OUT/libcricket07host.a"
           xcrun ar -t "$OUT/libcricket07host.a" > "$OUT/objects.txt"

@@ -48,3 +48,8 @@ ControllerBridge.swift queues virtual-key transitions and FoundationView forward
 - `ios-controller-directinput-adapter.yml` compiles the queue, pump, adapter and a strict link-time `input_key_hid` stub. It verifies FIFO transitions, 32-event maximum, game-thread callback execution, empty-queue behavior and release-on-reset.
 - The adapter is outside the diagnostic Xcode source target so that it cannot introduce an unresolved `input_key_hid` symbol into the IPA. When a translated game executable and host input system are linked, add this source to the game target and invoke it **only on the game input thread** at a defined event-loop checkpoint.
 - Passing these tests does not demonstrate a running engine, DirectInput gameplay, or device controller compatibility.
+
+## Opt-in engine-frame controller checkpoint
+- The **separate iOS engine static archive** now compiles with `CRICKET07_IOS_GAME`, enabling a bounded `cricket07_controller_pump_directinput(32)` call from `host/d3d8.c:dev_Present` before scripted frame input. This executes on the guest render/game thread, not the Swift GameController callback thread.
+- `ios-engine-library.yml` includes the native HID queue, pump and DirectInput adapter in the iPhone and Simulator engine archives, and checks that the Present caller, adapter definition and real `input_key_hid` implementation are present.
+- This is a **conditional integration seam**. The diagnostic SwiftUI IPA does not link or start the translated game, and this hook cannot deliver input until a translated game executable reaches Direct3D Present. Paused or non-presenting game states need another game-thread input checkpoint.

@@ -3,6 +3,10 @@
 #include "d3d8.h"
 #include "render.h"
 
+#ifdef CRICKET07_IOS_GAME
+#include "../ios/engine/ControllerDirectInputAdapter.h"
+#endif
+
 #include <math.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -298,6 +302,10 @@ W(dev_Present) {
     d->frame++;
     extern void input_script_tick(uint32_t frame);
     extern void dump_tick(uint32_t frame);
+    /* Present is reached from the guest render/game thread, never Swift. */
+#ifdef CRICKET07_IOS_GAME
+    cricket07_controller_pump_directinput(32);
+#endif
     input_script_tick(d->frame);
     dump_tick(d->frame);
     static double last_t;
