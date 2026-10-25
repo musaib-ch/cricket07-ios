@@ -1,7 +1,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// Diagnostic untextured triangle only. Not Cricket 07's actual shaders.
+// Diagnostic triangle only. Not Cricket 07's actual shaders.
 struct TriangleVertex {
     float4 position [[position]];
     float4 color;
@@ -21,16 +21,15 @@ fragment float4 cricket07_test_fragment(TriangleVertex in [[stage_in]]) {
 }
 
 // Diagnostic unlit diffuse colors, not fixed-function stage emulation.
-struct StagedVertex { float4 position; float4 color; };
+struct StagedVertex { float4 position; float4 color; float2 uv; };
 vertex TriangleVertex cricket07_staged_vertex(const device StagedVertex *vertices [[buffer(0)]],
                                              uint id [[vertex_id]]) {
     TriangleVertex out;
     out.position = vertices[id].position;
     out.color = vertices[id].color;
-    // Diagnostic clip-space UV mapping, NOT the game vertex texcoords.
-    // C validates positions and the supported transform before staging.
-    out.uv = clamp(vertices[id].position.xy / vertices[id].position.w * 0.5 + 0.5,
-                   float2(0.0), float2(1.0));
+    // C validates and stages the recorded CVert.tc[0].xy values.
+    // Texture stage semantics and game texture binding remain unsupported.
+    out.uv = vertices[id].uv;
     return out;
 }
 
