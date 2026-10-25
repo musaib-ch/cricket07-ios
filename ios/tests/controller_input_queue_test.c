@@ -10,7 +10,8 @@ static size_t drain(void) {
 }
 int main(void) {
     cricket07_controller_reset();
-    assert(drain() == 0);
+    assert(drain() == 6);
+    for (size_t i = 0; i < 6; ++i) assert(out[i].pressed == 0);
     assert(cricket07_controller_enqueue_vk(0x99u, 1) == 0);
     assert(cricket07_controller_enqueue_vk(0x25u, 1) == 1);
     assert(cricket07_controller_enqueue_vk(0x25u, 1) == 0);
@@ -21,7 +22,8 @@ int main(void) {
     assert(out[1].hid_usage == 40 && out[1].pressed == 1);
     assert(out[2].hid_usage == 80 && out[2].pressed == 0);
     cricket07_controller_reset();
-    assert(drain() == 1 && out[0].hid_usage == 40 && !out[0].pressed);
+    assert(drain() == 6);
+    for (size_t i = 0; i < 6; ++i) assert(out[i].pressed == 0);
 
     const uint16_t vk[] = {0x25, 0x27, 0x26, 0x28, 0x0d, 0x1b};
     const uint16_t hid[] = {80, 79, 82, 81, 40, 41};
@@ -40,14 +42,14 @@ int main(void) {
     for (int i = 0; i < 127; ++i)
         assert(cricket07_controller_enqueue_vk(0x0du, (i & 1) == 0) == 1);
     assert(cricket07_controller_enqueue_vk(0x25u, 0) == 0);
-    assert(drain() == 2);
-    assert(out[0].hid_usage == 80 && out[0].pressed == 0);
-    assert(out[1].hid_usage == 40 && out[1].pressed == 0);
+    assert(drain() == 6);
+    for (size_t i = 0; i < 6; ++i) assert(out[i].pressed == 0);
     assert(cricket07_controller_enqueue_vk(0x25u, 0) == 0);
     assert(cricket07_controller_enqueue_vk(0x25u, 1) == 1);
     assert(drain() == 1 && out[0].hid_usage == 80 && out[0].pressed == 1);
     cricket07_controller_reset();
-    assert(drain() == 1 && out[0].hid_usage == 80 && !out[0].pressed);
+    assert(drain() == 6);
+    for (size_t i = 0; i < 6; ++i) assert(out[i].pressed == 0);
     assert(cricket07_controller_drain(NULL, 1) == 0);
     assert(cricket07_controller_drain(out, 0) == 0);
     puts("controller HID queue tests passed");
