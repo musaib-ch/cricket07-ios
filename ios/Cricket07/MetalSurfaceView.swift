@@ -47,6 +47,9 @@ struct MetalSurfaceView: UIViewRepresentable {
         private var syntheticTexturePending = false
         private var diagnosticTexturedFrame = false
         private var depthStates: [UInt32: MTLDepthStencilState] = [:]
+        // Reused mailbox scratch space for validated recorder texture commands.
+        // The queue bounds complete frames to 16 MiB, so this never grows.
+        private var textureCommandScratch = [UInt8](repeating: 0, count: 16 * 1024 * 1024)
         private var stagedVertices: MTLBuffer?
         private var stagedVertexCount = 0
         private var stagedCalls: [Cricket07DrawCall] = []
@@ -214,6 +217,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                 var frame: UInt32 = 0
                 var calls = [Cricket07DrawCall](repeating: Cricket07DrawCall(), count: 64)
                 var callCount = 0
+                var textureBytes = 0
                 let pixelWidth = Int(view.drawableSize.width)
                 let pixelHeight = Int(view.drawableSize.height)
                 guard pixelWidth > 0 && pixelHeight > 0 &&
@@ -223,18 +227,66 @@ struct MetalSurfaceView: UIViewRepresentable {
                         diffuse.withUnsafeMutableBufferPointer { colors in
                             uv0.withUnsafeMutableBufferPointer { texcoords in
                                 calls.withUnsafeMutableBufferPointer { d in
-                                    cricket07_take_colored_uv_viewport_triangle_frame(
-                                        c.baseAddress, c.count, v.baseAddress, v.count,
-                                        colors.baseAddress, colors.count,
-                                        texcoords.baseAddress, texcoords.count,
-                                        &count, &frame, d.baseAddress, d.count, &callCount,
-                                        UInt32(pixelWidth), UInt32(pixelHeight)) == 1
+                                    textureCommandScratch.withUnsafeMutableBufferPointer { commands in
+                                        cricket07_take_colored_uv_texture_frame(
+                                            c.baseAddress, c.count, v.baseAddress, v.count,
+                                            colors.baseAddress, colors.count,
+                                            texcoords.baseAddress, texcoords.count,
+                                            &count, &frame, d.baseAddress, d.count, &callCount,
+                                            UInt32(pixelWidth), UInt32(pixelHeight),
+                                            commands.baseAddress, commands.count, &textureBytes) == 1
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 if found && count > 0 {
+                    // Replay validated uploads/destroys before encoding the frame.
+                    // The C decoder only accepts mutations before the first draw.
+                    // Fail closed if Metal cannot allocate any requested texture.
+                    var offset = 0
+                    var textureOperationsValid = true
+                    func readU32(_ index: Int) -> UInt32 {
+                        UInt32(textureCommandScratch[index])
+                            | (UInt32(textureCommandScratch[index + 1]) << 8)
+                            | (UInt32(textureCommandScratch[index + 2]) << 16)
+                            | (UInt32(textureCommandScratch[index + 3]) << 24)
+                    }
+                    while offset < textureBytes {
+                        if textureBytes - offset < 8 {
+                            textureOperationsValid = false
+                            break
+                        }
+                        let type = readU32(offset)
+                        let size = Int(readU32(offset + 4))
+                        if size < 8 || size % 8 != 0 || size > textureBytes - offset {
+                            textureOperationsValid = false
+                            break
+                        }
+                        if type == 4 { // CMD_UPLOAD_TEX
+                            let command = Data(textureCommandScratch[offset..<(offset + size)])
+                            if textureStore?.upload(command: command) != true {
+                                textureOperationsValid = false
+                                break
+                            }
+                        } else if type == 5 { // CMD_DESTROY_TEX
+                            if size < 16 {
+                                textureOperationsValid = false
+                                break
+                            }
+                            textureStore?.remove(id: readU32(offset + 8))
+                        } else {
+                            textureOperationsValid = false
+                            break
+                        }
+                        offset += size
+                    }
+                    if !textureOperationsValid {
+                        stagedCalls = []
+                        stagedVertexCount = 0
+                        return
+                    }
                     // Metal receives tightly packed float4 position, float4 diffuse,
                     // float2 UV0 (40 bytes/vertex). UVs are recorded, not synthesized.
                     var active = [Float](repeating: 0, count: count * 10)
