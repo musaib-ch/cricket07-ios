@@ -1,6 +1,7 @@
 #ifndef CRICKET07_RUNTIME_BRIDGE_H
 #define CRICKET07_RUNTIME_BRIDGE_H
 #include <stddef.h>
+#include "ViewportBridge.h"
 /// Returns 1 when the linked C runtime function registry passes a deterministic smoke test.
 /// Does not allocate the 4 GiB guest address space or execute Cricket 07.
 int cricket07_runtime_linked(void);
@@ -31,6 +32,13 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity, float *xyz
 int cricket07_take_transformed_triangle_frame(float *rgba, size_t color_capacity,
                                               float *xyzw, size_t vertex_float_capacity,
                                               size_t *vertex_count, unsigned int *frame_number);
+/// Consume a diagnostic frame with separate viewport and vertex range per draw.
+int cricket07_take_viewport_triangle_frame(float *rgba, size_t color_capacity,
+                                          float *xyzw, size_t vertex_float_capacity,
+                                          size_t *vertex_count, unsigned int *frame_number,
+                                          Cricket07DrawCall *calls, size_t call_capacity,
+                                          size_t *call_count, uint32_t target_width,
+                                          uint32_t target_height);
 /// Publish one synthetic CLEAR/DRAW/PRESENT frame through the actual native mailbox.
 int cricket07_submit_test_triangle_frame(void);
 #endif
