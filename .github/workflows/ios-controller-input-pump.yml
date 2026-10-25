@@ -1,0 +1,27 @@
+name: iOS controller game-thread pump regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/ControllerInputQueue.*'
+      - 'ios/Cricket07/ControllerInputPump.*'
+      - 'ios/tests/controller_input_pump_test.c'
+      - '.github/workflows/ios-controller-input-pump.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test bounded game-thread input dispatch
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -pthread \
+            -Iios/Cricket07 \
+            ios/Cricket07/ControllerInputQueue.c \
+            ios/Cricket07/ControllerInputPump.c \
+            ios/tests/controller_input_pump_test.c \
+            -o /tmp/cricket07-controller-pump-test
+          /tmp/cricket07-controller-pump-test
