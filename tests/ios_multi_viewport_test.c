@@ -129,6 +129,54 @@ int main(void) {
     uv_vertex.tc[0][0] = 0.25f;
     memcpy(stream + first_vertex_offset, &uv_vertex, sizeof uv_vertex);
 
+    /* A single fixed-function stage-0 texture * diffuse draw is supported
+     * only by the UV-enabled path. Preserve its numeric texture binding. */
+    const size_t stage_offset = sizeof(CmdTarget) + sizeof(CmdClear) + stride;
+    CmdDraw staged_textured = {0};
+    memcpy(&staged_textured, stream + stage_offset, sizeof staged_textured);
+    staged_textured.slot_kind[0] = TS_TEX;
+    staged_textured.slot_id[0] = 77u;
+    staged_textured.samp_key[0] = 432u;
+    staged_textured.u.st0[0] = 4u; staged_textured.u.st0[1] = 2u;
+    staged_textured.u.st0[2] = 0u; staged_textured.u.st0[3] = 4u;
+    staged_textured.u.st0b[0] = 2u; staged_textured.u.st0b[1] = 0u;
+    staged_textured.u.st1[0] = 1u;
+    uint32_t bound_id = 0;
+    assert(cricket07_resolve_texture_binding(&staged_textured, &bound_id));
+    assert(bound_id == 77u);
+    memcpy(stream + stage_offset, &staged_textured, sizeof staged_textured);
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(cricket07_take_colored_uv_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, uv, 12,
+        &nverts, &frame, calls, 2, &ncalls, 1280, 960));
+    assert(ncalls == 2 && calls[0].texture_id == 0u && calls[1].texture_id == 77u);
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(!cricket07_take_colored_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, &nverts, &frame,
+        calls, 2, &ncalls, 1280, 960));
+    staged_textured.u.st0[0] = 7u; /* unsupported ADD operation */
+    assert(!cricket07_resolve_texture_binding(&staged_textured, &bound_id));
+    staged_textured.u.st0[0] = 4u;
+    staged_textured.samp_key[0] = 0u; /* repeat, not clamp */
+    assert(!cricket07_resolve_texture_binding(&staged_textured, &bound_id));
+    staged_textured.samp_key[0] = 432u;
+    staged_textured.slot_kind[1] = TS_TEX; /* unsupported second stage */
+    assert(!cricket07_resolve_texture_binding(&staged_textured, &bound_id));
+    staged_textured.slot_kind[1] = TS_NONE;
+    staged_textured.slot_id[0] = 0u;
+    assert(!cricket07_resolve_texture_binding(&staged_textured, &bound_id));
+    staged_textured.slot_kind[0] = TS_NONE;
+    assert(cricket07_resolve_texture_binding(&staged_textured, &bound_id));
+    assert(bound_id == 0u);
+    /* Restore the original untextured draw for subsequent regression cases. */
+    staged_textured.slot_id[0] = 0u;
+    staged_textured.samp_key[0] = 0u;
+    staged_textured.u.st0[0] = 0u; staged_textured.u.st0[1] = 0u;
+    staged_textured.u.st0[2] = 0u; staged_textured.u.st0[3] = 0u;
+    staged_textured.u.st0b[0] = 0u; staged_textured.u.st0b[1] = 0u;
+    staged_textured.u.st1[0] = 0u;
+    memcpy(stream + stage_offset, &staged_textured, sizeof staged_textured);
+
     /* Color buffer under-capacity must fail without writing past it. */
     assert(cricket07_frame_queue_publish(stream, offset));
     assert(!cricket07_take_colored_viewport_triangle_frame(
