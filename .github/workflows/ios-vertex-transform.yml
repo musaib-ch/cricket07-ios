@@ -1,0 +1,35 @@
+name: iOS vertex transform regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/VertexTransform.c'
+      - 'ios/Cricket07/VertexTransform.h'
+      - 'host/render_cmd.h'
+      - 'tests/ios_vertex_transform_test.c'
+      - '.github/workflows/ios-vertex-transform.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transform:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test D3D to Metal clip-space math
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/VertexTransform.c tests/ios_vertex_transform_test.c \
+            -o "$RUNNER_TEMP/vertex-transform-tests"
+          "$RUNNER_TEMP/vertex-transform-tests"
+      - name: Cross compile for iPhone ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" \
+            -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            -c ios/Cricket07/VertexTransform.c -o "$RUNNER_TEMP/VertexTransform.o"
+          echo "Reference transform validated. GPU viewport/state and live game input remain unimplemented." >> "$GITHUB_STEP_SUMMARY"
