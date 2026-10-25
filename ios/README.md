@@ -13,10 +13,11 @@ This directory is an initial iOS controller and architecture foundation, **not a
 ## Current graphics integration (diagnostic only)
 - The existing `CmdDraw` triangle-list parser extracts raw Direct3D vertices from the bounded frame queue.
 - `cricket07_take_transformed_triangle_frame` applies the reference position transformation from `VertexTransform.c` to each draw before Swift uploads clip-space vertices to Metal.
+- The viewport-aware Metal consumer now preserves individual `CMD_DRAW` ranges and translates logical Direct3D viewports into drawable-pixel Metal viewports, including bounds clipping and depth-range validation. The synthetic producer includes an explicit backbuffer `CMD_TARGET`.
 - The legacy `cricket07_take_triangle_frame` remains available for raw staging and regression tests.
 - Unsupported or malformed transforms are rejected rather than rendered as raw clip coordinates. A synthetic mode-2 draw validates half-pixel correction; no live game producer is connected.
 - Tests run through `ios-draw-frame-consumer.yml`; `ios-app-shell.yml` compiles and packages the unsigned diagnostic app for iPhone and Simulator.
-- Rendering still lacks production texture sampling, per-draw blend/depth/cull state, render targets, game-generated commands, and device gameplay verification.
+- Rendering still lacks production texture sampling, per-draw blend/depth/cull state, non-backbuffer render targets, game-generated commands, and device gameplay verification. The diagnostic depth state is fixed, and viewport handling alone is not sufficient for game rendering.
 
 ## Critical blockers
 1. Existing build.sh targets macOS and uses Cocoa, IOKit, SDL2, and desktop wgpu libraries.
