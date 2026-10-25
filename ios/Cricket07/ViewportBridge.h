@@ -26,10 +26,17 @@ typedef struct {
     Cricket07Viewport viewport;
     uint32_t first_vertex, vertex_count;
     Cricket07DrawState state;
+    /* Zero means untextured. Nonzero is a validated TS_TEX stage-0 ID. */
+    uint32_t texture_id;
 } Cricket07DrawCall;
 
 /* Reject unsupported state values rather than guessing Metal behavior. */
 int cricket07_resolve_draw_state(const CmdDraw *draw, Cricket07DrawState *out);
+
+/* Narrow fixed-function stage-0 modulation subset: texture * diffuse,
+ * point sampling and clamp addressing. Rejects unsupported stages/modes.
+ * A zero output means an untextured draw. */
+int cricket07_resolve_texture_binding(const CmdDraw *draw, uint32_t *texture_id);
 
 int cricket07_resolve_viewport(const CmdDraw *draw,
                               uint32_t target_width, uint32_t target_height,
