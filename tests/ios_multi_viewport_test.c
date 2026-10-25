@@ -99,6 +99,36 @@ int main(void) {
     assert(diffuse[10] == 1.0f && diffuse[11] == 1.0f);
     assert(fabsf(diffuse[12] - 1.0f) < 0.0001f);
 
+    /* UV0 staging must preserve recorded texture coordinates, not generate
+     * them from transformed screen positions. Textured draws remain rejected. */
+    const size_t first_vertex_offset = sizeof(CmdTarget) + sizeof(CmdClear) + sizeof(CmdDraw);
+    CVert uv_vertex;
+    memcpy(&uv_vertex, stream + first_vertex_offset, sizeof uv_vertex);
+    uv_vertex.tc[0][0] = 0.25f;
+    uv_vertex.tc[0][1] = 0.75f;
+    memcpy(stream + first_vertex_offset, &uv_vertex, sizeof uv_vertex);
+    float uv[12] = {0};
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(cricket07_take_colored_uv_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, uv, 12,
+        &nverts, &frame, calls, 2, &ncalls, 1280, 960));
+    assert(nverts == 6 && ncalls == 2);
+    assert(fabsf(uv[0] - 0.25f) < 0.0001f);
+    assert(fabsf(uv[1] - 0.75f) < 0.0001f);
+    assert(uv[2] == 0.0f && uv[11] == 0.0f);
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(!cricket07_take_colored_uv_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, uv, 11,
+        &nverts, &frame, calls, 2, &ncalls, 1280, 960));
+    uv_vertex.tc[0][0] = NAN;
+    memcpy(stream + first_vertex_offset, &uv_vertex, sizeof uv_vertex);
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(!cricket07_take_colored_uv_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, uv, 12,
+        &nverts, &frame, calls, 2, &ncalls, 1280, 960));
+    uv_vertex.tc[0][0] = 0.25f;
+    memcpy(stream + first_vertex_offset, &uv_vertex, sizeof uv_vertex);
+
     /* Color buffer under-capacity must fail without writing past it. */
     assert(cricket07_frame_queue_publish(stream, offset));
     assert(!cricket07_take_colored_viewport_triangle_frame(
