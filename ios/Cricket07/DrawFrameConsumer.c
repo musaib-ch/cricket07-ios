@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Experimental frame consumer: one untextured triangle-list CMD_DRAW,
- * plus backbuffer TARGET/CLEAR/PRESENT. Not a complete D3D8 renderer.
+/* Experimental frame consumer: multiple untextured triangle-list CMD_DRAW
+ * commands, plus backbuffer TARGET/CLEAR/PRESENT. Not a complete D3D8 renderer.
  * A real game's transforms, depth, blend and texture state are not handled.
  */
 int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
@@ -46,10 +46,16 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
             color[3] = ((c.color >> 24) & 255) / 255.0f;
             cleared = 1;
         } else if (h.type == CMD_DRAW) {
-            if (drawn || !cricket07_extract_triangles(item, h.size, xyzw,
-                                                      vertex_float_capacity, &vertices)) {
+            if (!cleared || vertices > vertex_float_capacity / 4u) {
                 ok = 0; break;
             }
+            size_t added = 0;
+            size_t remaining = vertex_float_capacity - vertices * 4u;
+            if (!cricket07_extract_triangles(item, h.size, xyzw + vertices * 4u,
+                                             remaining, &added)) {
+                ok = 0; break;
+            }
+            vertices += added;
             drawn = 1;
         } else if (h.type == CMD_PRESENT) {
             CmdPresent c;
