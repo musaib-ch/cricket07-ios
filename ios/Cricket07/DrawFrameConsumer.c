@@ -1,5 +1,6 @@
 #include "FrameQueue.h"
 #include "TriangleStaging.h"
+#include "VertexTransform.h"
 #include "render_cmd.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -9,9 +10,10 @@
  * commands, plus backbuffer TARGET/CLEAR/PRESENT. Not a complete D3D8 renderer.
  * A real game's transforms, depth, blend and texture state are not handled.
  */
-int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
-                                  float *xyzw, size_t vertex_float_capacity,
-                                  size_t *vertex_count, unsigned int *frame_number) {
+static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
+                                    float *xyzw, size_t vertex_float_capacity,
+                                    size_t *vertex_count, unsigned int *frame_number,
+                                    int transform_positions) {
     if (!rgba || color_capacity < 4 || !xyzw || !vertex_count || !frame_number) return 0;
     const size_t limit = 16u * 1024u * 1024u;
     unsigned char *bytes = malloc(limit);
@@ -55,6 +57,15 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
                                              remaining, &added)) {
                 ok = 0; break;
             }
+            if (transform_positions) {
+                CmdDraw draw;
+                memcpy(&draw, item, sizeof(draw)); /* extractor validated command length */
+                if (!cricket07_transform_draw_positions(&draw, xyzw + vertices * 4u,
+                                                        added, xyzw + vertices * 4u,
+                                                        remaining)) {
+                    ok = 0; break;
+                }
+            }
             vertices += added;
             drawn = 1;
         } else if (h.type == CMD_PRESENT) {
@@ -74,6 +85,23 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
     *vertex_count = vertices;
     *frame_number = frame;
     return 1;
+}
+
+/* Retain raw-vertex API for staging tests and debugging. */
+int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
+                                  float *xyzw, size_t vertex_float_capacity,
+                                  size_t *vertex_count, unsigned int *frame_number) {
+    return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
+                                    vertex_count, frame_number, 0);
+}
+
+/* Metal consumer: reject unsupported transforms instead of drawing raw D3D
+ * coordinates as if they were already Metal clip-space positions. */
+int cricket07_take_transformed_triangle_frame(float *rgba, size_t color_capacity,
+                                              float *xyzw, size_t vertex_float_capacity,
+                                              size_t *vertex_count, unsigned int *frame_number) {
+    return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
+                                    vertex_count, frame_number, 1);
 }
 
 
@@ -97,6 +125,10 @@ int cricket07_submit_test_triangle_frame(void) {
     draw.h.size = (uint32_t)draw_size;
     draw.key.topo = 4u;  /* WGPU triangle-list topology */
     draw.nverts = 3u;
+    /* Clip-space diagnostic geometry with the reference half-pixel correction. */
+    draw.u.flags[0] = 2u;
+    draw.u.vp[2] = 640.0f;
+    draw.u.vp[3] = 480.0f;
     CVert vertices[3] = {0};
     vertices[0].x = -0.7f; vertices[0].y = -0.55f; vertices[0].w = 1.0f;
     vertices[1].x =  0.7f; vertices[1].y = -0.55f; vertices[1].w = 1.0f;
