@@ -20,4 +20,8 @@ typedef struct {
  */
 int cricket07_decode_texture_upload(const void *bytes, size_t length,
                                     Cricket07TextureUpload *out);
+/* Generate a tiny synthetic RGBA8 mip chain for on-device Metal
+ * allocation smoke testing. Never reads or distributes game assets. */
+int cricket07_make_test_texture_upload(void *out, size_t capacity,
+                                       size_t *written);
 #endif
