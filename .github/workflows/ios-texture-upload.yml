@@ -1,0 +1,36 @@
+name: iOS texture upload decoder regression
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/Cricket07/TextureUploadBridge.c'
+      - 'ios/Cricket07/TextureUploadBridge.h'
+      - 'host/render_cmd.h'
+      - 'tests/ios_texture_upload_bridge_test.c'
+      - '.github/workflows/ios-texture-upload.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  texture-decoder:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run bounded RGBA8 mip-chain decoder tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/TextureUploadBridge.c tests/ios_texture_upload_bridge_test.c \
+            -o "$RUNNER_TEMP/texture-tests"
+          "$RUNNER_TEMP/texture-tests"
+      - name: Cross-compile decoder for iPhone ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -std=c11 \
+            -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            -c ios/Cricket07/TextureUploadBridge.c -o "$RUNNER_TEMP/TextureUploadBridge.o"
+          xcrun lipo -info "$RUNNER_TEMP/TextureUploadBridge.o"
+          echo "RGBA8 upload metadata validated; no Metal texture binding or game assets." >> "$GITHUB_STEP_SUMMARY"
