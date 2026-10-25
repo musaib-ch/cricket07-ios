@@ -12,6 +12,10 @@ struct MetalSurfaceView: UIViewRepresentable {
         let view = MTKView(frame: .zero)
         view.device = MTLCreateSystemDefaultDevice()
         view.colorPixelFormat = .bgra8Unorm
+        // Diagnostic depth attachment for the first untextured triangle pipeline.
+        // Real game depth-state commands still require translation.
+        view.depthStencilPixelFormat = .depth32Float
+        view.clearDepth = 1.0
         view.framebufferOnly = true
         var channels = [Float](repeating: 0, count: 4)
         var frameNumber: UInt32 = 0
@@ -36,6 +40,7 @@ struct MetalSurfaceView: UIViewRepresentable {
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
         private var testPipeline: MTLRenderPipelineState?
+        private var diagnosticDepthState: MTLDepthStencilState?
         private var stagedVertices: MTLBuffer?
         private var stagedVertexCount = 0
         private var hasReceivedDraw = false
@@ -56,7 +61,12 @@ struct MetalSurfaceView: UIViewRepresentable {
                 descriptor.vertexFunction = vertex
                 descriptor.fragmentFunction = fragment
                 descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
+                descriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
                 testPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
+                let depth = MTLDepthStencilDescriptor()
+                depth.depthCompareFunction = .lessEqual
+                depth.isDepthWriteEnabled = true
+                diagnosticDepthState = device.makeDepthStencilState(descriptor: depth)
             }
             // Queue a complete synthetic draw frame. Only the supported
             // diagnostic command subset is consumed by this Metal view.
@@ -111,6 +121,9 @@ struct MetalSurfaceView: UIViewRepresentable {
             }
             if let testPipeline, let stagedVertices, stagedVertexCount > 0 {
                 encoder.setRenderPipelineState(testPipeline)
+                if let diagnosticDepthState {
+                    encoder.setDepthStencilState(diagnosticDepthState)
+                }
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
                 encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: stagedVertexCount)
             }
