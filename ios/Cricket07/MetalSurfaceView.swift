@@ -88,7 +88,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                 var frame: UInt32 = 0
                 let found = color.withUnsafeMutableBufferPointer { c in
                     vertices.withUnsafeMutableBufferPointer { v in
-                        cricket07_take_triangle_frame(c.baseAddress, c.count,
+                        cricket07_take_transformed_triangle_frame(c.baseAddress, c.count,
                                                       v.baseAddress, v.count, &count, &frame) == 1
                     }
                 }
@@ -107,7 +107,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                         if !hasReceivedDraw {
                             hasReceivedDraw = true
                             DispatchQueue.main.async { [weak self] in
-                                self?.status.wrappedValue = "Diagnostic CMD_DRAW decoded; Metal buffer ready"
+                                self?.status.wrappedValue = "Diagnostic CMD_DRAW transformed to Metal clip space"
                             }
                         }
                     }
