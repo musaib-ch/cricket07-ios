@@ -121,6 +121,34 @@ int main(void) {
     assert(cricket07_take_triangle_frame(NULL, 4, xyzw, 12, &count, &frame) == 0);
     assert(cricket07_take_triangle_frame(rgba, 3, xyzw, 12, &count, &frame) == 0);
     cricket07_frame_queue_reset();
+
+    /* The iOS app now exercises CMD_UPLOAD_TEX through the real mailbox,
+     * instead of bypassing the frame decoder with a Swift-side upload. */
+    {
+        float colors[12] = {0}, uv[6] = {0};
+        Cricket07DrawCall textured_calls[2] = {0};
+        size_t textured_count = 0, command_bytes = 0;
+        unsigned char commands[256] = {0};
+        assert(cricket07_submit_test_uploaded_texture_frame() == 1);
+        assert(cricket07_take_colored_uv_texture_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_count, 1280, 960,
+            commands, sizeof commands, &command_bytes) == 1);
+        assert(count == 3 && frame == 7 && textured_count == 1);
+        assert(textured_calls[0].texture_id == 1u);
+        Cricket07TextureUpload decoded = {0};
+        assert(cricket07_decode_texture_upload(commands, command_bytes, &decoded) == 1);
+        assert(decoded.texture_id == 1u && decoded.levels == 2u);
+        assert(decoded.width[0] == 2u && decoded.height[0] == 2u);
+        assert(decoded.width[1] == 1u && decoded.height[1] == 1u);
+        assert(fabsf(uv[1] - 1.f) < 0.0001f);
+        /* Legacy consumers must not silently discard the new upload. */
+        assert(cricket07_submit_test_uploaded_texture_frame() == 1);
+        assert(cricket07_take_colored_uv_viewport_triangle_frame(
+            rgba, 4, xyzw, 12, colors, 12, uv, 6, &count, &frame,
+            textured_calls, 2, &textured_count, 1280, 960) == 0);
+    }
+
     /* Real recorder texture commands must be copied out of a validated
      * frame before Metal consumes its draw calls. The payload is synthetic. */
     {
