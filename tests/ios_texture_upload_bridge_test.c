@@ -58,6 +58,21 @@ int main(void) {
     memcpy(bytes, &bad, sizeof(bad));
     assert(cricket07_decode_texture_upload(bytes, bad.h.size, &out) == 1);
     assert(out.levels == 1 && out.pixel_bytes[0] == 4);
+    /* The Metal allocation smoke test must be a complete, decodable
+     * synthetic command and must never write beyond caller capacity. */
+    unsigned char sample[256] = {0};
+    size_t written = 0;
+    assert(cricket07_make_test_texture_upload(sample, sizeof(sample), &written) == 1);
+    assert(written <= sizeof(sample));
+    assert(cricket07_decode_texture_upload(sample, written, &out) == 1);
+    assert(out.texture_id == 1 && out.levels == 2);
+    assert(out.width[0] == 2 && out.height[0] == 2);
+    assert(out.width[1] == 1 && out.height[1] == 1);
+    assert(sample[out.pixel_offset[0]] == 255);
+    assert(sample[out.pixel_offset[1]] == 128);
+    assert(cricket07_make_test_texture_upload(sample, written - 1, &written) == 0);
+    assert(cricket07_make_test_texture_upload(NULL, sizeof(sample), &written) == 0);
+    assert(cricket07_make_test_texture_upload(sample, sizeof(sample), NULL) == 0);
     puts("iOS texture upload decoder regression passed");
     return 0;
 }
