@@ -8,9 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Experimental frame consumer: multiple untextured triangle-list CMD_DRAW
- * commands, plus backbuffer TARGET/CLEAR/PRESENT. Not a complete D3D8 renderer.
- * A real game's transforms, depth, blend and texture state are not handled.
+/* Experimental bounded frame consumer: triangle-list CMD_DRAW plus
+ * backbuffer TARGET/CLEAR/PRESENT. A narrow stage-0 texture modulation
+ * subset is supported by the opt-in colored UV path. Not a D3D8 renderer.
  */
 static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                                     float *xyzw, size_t vertex_float_capacity,
@@ -86,12 +86,17 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
             /* Unlit diagnostic diffuse colors. CVert.diffuse is D3DCOLOR
              * 0xAARRGGBB. Do not misrepresent textured, lit or shader draws
              * as correctly shaded geometry in this narrow staging path. */
+            uint32_t texture_id = 0;
             if (diffuse_rgba) {
                 CmdDraw draw;
                 memcpy(&draw, item, sizeof(draw)); /* validated by extractor */
+                /* The UV-enabled Metal path may accept one narrowly supported
+                 * fixed-function texture stage. Diffuse-only mode still
+                 * rejects all texture-bound draws. */
                 if (draw.pixel_shader || draw.u.flags[3] ||
-                    draw.slot_kind[0] || draw.slot_kind[1] ||
-                    draw.slot_kind[2] || draw.slot_kind[3] ||
+                    (!uv0 && (draw.slot_kind[0] || draw.slot_kind[1] ||
+                              draw.slot_kind[2] || draw.slot_kind[3])) ||
+                    (uv0 && !cricket07_resolve_texture_binding(&draw, &texture_id)) ||
                     vertices > diffuse_float_capacity / 4u ||
                     added > diffuse_float_capacity / 4u - vertices) {
                     ok = 0; break;
@@ -136,6 +141,7 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                 }
                 call.first_vertex = (uint32_t)vertices;
                 call.vertex_count = (uint32_t)added;
+                call.texture_id = texture_id;
                 calls[n_calls++] = call;
             }
             vertices += added;
