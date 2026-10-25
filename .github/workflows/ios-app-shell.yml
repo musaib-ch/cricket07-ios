@@ -37,10 +37,19 @@ jobs:
           EXE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
           test -f "$APP/$EXE"
           file "$APP/$EXE" | grep -q 'Mach-O'
-          xcrun nm "$APP/$EXE" | grep -q 'cricket07_take_triangle_frame' || {
-            echo 'Required graphics consumer symbol not linked' >&2
+          # Xcode Debug builds can place implementation symbols in a separate
+          # .debug.dylib rather than the thin application executable.
+          FOUND=0
+          for MACHO in "$APP/$EXE" "$APP/$EXE.debug.dylib"; do
+            if [ -f "$MACHO" ] && xcrun nm "$MACHO" | grep 'cricket07_take_triangle_frame' >/dev/null; then
+              FOUND=1
+              break
+            fi
+          done
+          if [ "$FOUND" -ne 1 ]; then
+            echo 'Required graphics consumer symbol missing from app and debug dylib' >&2
             exit 1
-          }
+          fi
           test -f "$APP/default.metallib" || {
             echo 'Metal shader library missing from app' >&2
             exit 1
