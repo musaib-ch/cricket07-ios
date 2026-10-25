@@ -13,10 +13,21 @@ typedef struct {
 
 /* A draw range and its own viewport. A flattened vertex buffer alone cannot
  * represent different viewport states for consecutive CMD_DRAW commands. */
+/* Normalized Direct3D depth and cull state for a single Metal draw.
+ * depth_compare uses D3DCMP values 1..8; cull_mode is 0:none, 1:front, 2:back.
+ */
+typedef struct {
+    uint32_t depth_compare, depth_write, cull_mode;
+} Cricket07DrawState;
+
 typedef struct {
     Cricket07Viewport viewport;
     uint32_t first_vertex, vertex_count;
+    Cricket07DrawState state;
 } Cricket07DrawCall;
+
+/* Reject unsupported state values rather than guessing Metal behavior. */
+int cricket07_resolve_draw_state(const CmdDraw *draw, Cricket07DrawState *out);
 
 int cricket07_resolve_viewport(const CmdDraw *draw,
                               uint32_t target_width, uint32_t target_height,
