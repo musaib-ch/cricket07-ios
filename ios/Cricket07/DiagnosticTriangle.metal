@@ -23,8 +23,9 @@ vertex TriangleVertex cricket07_staged_vertex(const device StagedVertex *vertice
                                              uint id [[vertex_id]]) {
     TriangleVertex out;
     out.position = vertices[id].position;
-    out.color = float4(0.2 + float(id == 0) * 0.8,
-                       0.2 + float(id == 1) * 0.8,
-                       0.2 + float(id == 2) * 0.8, 1.0);
+    uint corner = id % 3;
+    out.color = float4(0.2 + float(corner == 0) * 0.8,
+                       0.2 + float(corner == 1) * 0.8,
+                       0.2 + float(corner == 2) * 0.8, 1.0);
     return out;
 }
