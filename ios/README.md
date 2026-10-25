@@ -5,7 +5,7 @@ This directory is an initial iOS controller and architecture foundation, **not a
 ## Design
 - SwiftUI application shell, iOS 17+ (planned).
 - GameController.framework for supported Bluetooth controllers.
-- Objective-C++/C bridge to the existing host input queue (not yet wired).
+- Swift GameController transitions now enter a bounded, mutex-protected C HID event queue. The translated host input consumer is not linked yet.
 - Existing translated C runtime compiled for arm64-apple-ios after compatibility validation.
 - A diagnostic MetalKit renderer compiles and consumes a bounded synthetic CLEAR/DRAW/PRESENT command stream. It is not a full Direct3D 8 renderer.
 - User-owned game assets imported into sandboxed Application Support storage; do not distribute EA assets.
@@ -31,7 +31,7 @@ This directory is an initial iOS controller and architecture foundation, **not a
 4. Native sound, file APIs, and lifecycle handling require platform adapters.
 5. Generated translated C sources and user-owned game assets must be supplied to make a playable build.
 
-ControllerBridge.swift queues virtual-key transitions. It does not inject them into the game until the host bridge is implemented. Default bindings are menu navigation only, not verified batting controls.
+ControllerBridge.swift queues virtual-key transitions and FoundationView forwards them to ControllerInputQueue.c. The queue maps arrow keys, Enter and Escape to the same USB HID usages understood by host/input.c, deduplicates held transitions, and clears potentially stuck keys on overflow, view teardown or reset. ios-controller-input-queue.yml exercises mapping, release, and overflow behavior. A future game-thread adapter must drain Cricket07HIDEvent values and call input_key_hid() on the translated host thread. Events are NOT injected into the game yet. Default bindings are menu navigation only, not verified batting controls.
 
 ## Security
 - No game assets, signing certificates, tokens, or secrets should be committed.
