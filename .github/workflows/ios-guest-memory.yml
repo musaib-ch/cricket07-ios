@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           for mode in normal failure; do
-            FLAGS=()
+            FLAGS=(-fno-omit-frame-pointer)
             if [ "$mode" = failure ]; then
               FLAGS+=(-DRC_TEST_GUEST_MAP_FAILURE)
             fi
