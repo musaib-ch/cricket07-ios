@@ -28,6 +28,52 @@ int main(void) {
     assert(rgba[3] == 1.0f);
     assert(cricket07_take_triangle_frame(rgba, 4, xyzw, 12, &count, &frame) == 0);
 
+    /* Two sequential CMD_DRAW commands must combine into one Metal buffer. */
+    {
+        const size_t draw_size = (sizeof(CmdDraw) + 3u * sizeof(CVert) + 7u) & ~(size_t)7u;
+        unsigned char stream[sizeof(CmdClear) + 2u * (sizeof(CmdDraw) + 3u * sizeof(CVert) + 8u)
+                             + sizeof(CmdPresent)] = {0};
+        CmdClear clear = {0};
+        clear.h.type = CMD_CLEAR;
+        clear.h.size = (uint32_t)sizeof(clear);
+        clear.flags = 1u;
+        clear.color = 0xFF166078u;
+        size_t offset = 0;
+        memcpy(stream + offset, &clear, sizeof clear);
+        offset += sizeof clear;
+        for (unsigned int d = 0; d < 2; ++d) {
+            CmdDraw draw = {0};
+            draw.h.type = CMD_DRAW;
+            draw.h.size = (uint32_t)draw_size;
+            draw.key.topo = 4u;
+            draw.nverts = 3u;
+            CVert verts[3] = {0};
+            verts[0].x = d == 0 ? -0.8f : 0.1f;
+            verts[1].x = d == 0 ? -0.1f : 0.8f;
+            verts[2].y = 0.8f;
+            for (size_t v = 0; v < 3; ++v) verts[v].w = 1.0f;
+            memcpy(stream + offset, &draw, sizeof draw);
+            memcpy(stream + offset + sizeof draw, verts, sizeof verts);
+            offset += draw_size;
+        }
+        CmdPresent present = {0};
+        present.h.type = CMD_PRESENT;
+        present.h.size = (uint32_t)sizeof(present);
+        present.frame = 8u;
+        memcpy(stream + offset, &present, sizeof present);
+        offset += sizeof present;
+        float multi[24] = {0};
+        assert(cricket07_frame_queue_publish(stream, offset) == 1);
+        assert(cricket07_take_triangle_frame(rgba, 4, multi, 24, &count, &frame) == 1);
+        assert(count == 6 && frame == 8u);
+        assert(fabsf(multi[0] + 0.8f) < 0.0001f);
+        assert(fabsf(multi[12] - 0.1f) < 0.0001f);
+        assert(multi[23] == 1.0f);
+        /* A capacity of only five vertices must reject the second draw. */
+        assert(cricket07_frame_queue_publish(stream, offset) == 1);
+        assert(cricket07_take_triangle_frame(rgba, 4, multi, 20, &count, &frame) == 0);
+    }
+
     /* A too-small destination must not overrun and must reject the draw. */
     assert(cricket07_submit_test_triangle_frame() == 1);
     assert(cricket07_take_triangle_frame(rgba, 4, xyzw, 11, &count, &frame) == 0);
