@@ -83,8 +83,8 @@ struct MetalSurfaceView: UIViewRepresentable {
             // Queue a complete synthetic draw frame. Only the supported
             // diagnostic command subset is consumed by this Metal view.
             let submitted = cricket07_submit_test_triangle_frame() == 1
-            // Texture sampling is opt-in for this one generated frame only.
-            // Subsequent externally submitted frames remain untextured.
+            // Only the generated test texture is resident until actual texture
+            // upload commands are integrated into the frame consumer.
             syntheticTexturePending = submitted && textureReady && diagnosticTextureShader != nil
             status.wrappedValue = submitted
                 ? (textureReady
@@ -277,19 +277,25 @@ struct MetalSurfaceView: UIViewRepresentable {
             }
             if let stagedVertices, stagedVertexCount > 0,
                !stagedCalls.isEmpty {
-                // Never sample the synthetic texture for a later producer frame.
-                let diagnosticTexture = diagnosticTexturedFrame ? textureStore?.texture(id: 1) : nil
+                // Texture selection is now per draw, never per frame. The only
+                // resident texture today is synthetic ID 1; game uploads are
+                // not yet consumed from the recorded command stream.
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
                 encoder.setFrontFacing(.clockwise)
                 for call in stagedCalls {
+                    let boundTexture = call.texture_id == 0
+                        ? nil : textureStore?.texture(id: call.texture_id)
+                    // Never silently shade a textured draw as untextured when
+                    // its texture has not been uploaded or has been evicted.
+                    if call.texture_id != 0 && boundTexture == nil { continue }
                     guard let device = view.device,
                           let depthState = depthState(for: call.state, device: device),
                           let drawPipeline = pipeline(for: call.state, view: view,
-                                                      diagnosticTextured: diagnosticTexture != nil) else {
+                                                      diagnosticTextured: boundTexture != nil) else {
                         continue
                     }
                     encoder.setRenderPipelineState(drawPipeline)
-                    encoder.setFragmentTexture(diagnosticTexture, index: 0)
+                    encoder.setFragmentTexture(boundTexture, index: 0)
                     encoder.setDepthStencilState(depthState)
                     switch call.state.cull_mode {
                     case 1: encoder.setCullMode(.front)
