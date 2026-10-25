@@ -37,3 +37,28 @@ int cricket07_decode_texture_upload(const void *bytes, size_t length,
     *out = result;
     return 1;
 }
+
+/* A deterministic 2x2 RGBA8 texture and its 1x1 mip. Diagnostic only. */
+int cricket07_make_test_texture_upload(void *out, size_t capacity,
+                                       size_t *written) {
+    const size_t payload = 20u;
+    const size_t length = (sizeof(CmdUploadTex) + payload + 7u) & ~(size_t)7u;
+    if (!out || !written || capacity < length) return 0;
+    CmdUploadTex cmd = {0};
+    cmd.h.type = CMD_UPLOAD_TEX;
+    cmd.h.size = (uint32_t)length;
+    cmd.id = 1u;
+    cmd.levels = 2u;
+    cmd.w[0] = cmd.h_[0] = 2u;
+    cmd.w[1] = cmd.h_[1] = 1u;
+    static const unsigned char pixels[20] = {
+        255, 0, 0, 255, 0, 255, 0, 255,
+        0, 0, 255, 255, 255, 255, 255, 255,
+        128, 128, 128, 255
+    };
+    memset(out, 0, length);
+    memcpy(out, &cmd, sizeof(cmd));
+    memcpy((unsigned char *)out + sizeof(cmd), pixels, sizeof(pixels));
+    *written = length;
+    return 1;
+}
