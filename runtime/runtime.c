@@ -351,7 +351,8 @@ int runtime_try_init(CPU *c) {
 #if defined(RC_TEST_GUEST_MAP_FAILURE)
     /* Compile-time fault injection, exercised only by the isolated CI test. */
     return 0;
-#elif defined(__EMSCRIPTEN__)
+#else
+#ifdef __EMSCRIPTEN__
     uint8_t *mem = calloc(1, (size_t)GUEST_SPACE + 0x10000u);
     if (!mem) return 0;
 #else
@@ -365,6 +366,7 @@ int runtime_try_init(CPU *c) {
 #endif
     /* Commit the global pointer only after the reservation succeeds. */
     g_mem = mem;
+#endif /* RC_TEST_GUEST_MAP_FAILURE */
     memset(c, 0, sizeof *c);
     c->esp = GUEST_STACK_TOP;
     c->fpu_cw = 0x027f; /* MSVC default: 53-bit precision, round to nearest, exceptions masked */
