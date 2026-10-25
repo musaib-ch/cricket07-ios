@@ -24,10 +24,10 @@ jobs:
         run: |
           set -euo pipefail
           for mode in valid overflow null; do
-            flags=()
-            if [ "$mode" = overflow ]; then flags=(-DTEST_OVERFLOW); fi
-            if [ "$mode" = null ]; then flags=(-DTEST_NULL_TABLE); fi
-            clang -std=gnu11 -Wall -Wextra -Werror "${flags[@]}" \
+            flag=-DTEST_VALID
+            if [ "$mode" = overflow ]; then flag=-DTEST_OVERFLOW; fi
+            if [ "$mode" = null ]; then flag=-DTEST_NULL_TABLE; fi
+            clang -std=gnu11 -Wall -Wextra -Werror "$flag" \
               -Iruntime -Ihost host/import_registry.c \
               ios/tests/ios_import_registry_test.c \
               -o "$RUNNER_TEMP/import-$mode"
