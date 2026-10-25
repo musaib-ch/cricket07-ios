@@ -290,10 +290,13 @@ int cricket07_take_colored_uv_texture_frame(
  * Keep this producer isolated from the actual engine until supported
  * render states, transforms, and textures are implemented.
  */
-int cricket07_submit_test_triangle_frame(void) {
+static int submit_test_triangle_frame(int with_texture_upload) {
     const size_t draw_size = (sizeof(CmdDraw) + 3u * sizeof(CVert) + 7u) & ~(size_t)7u;
-    unsigned char bytes[sizeof(CmdTarget) + sizeof(CmdClear) + sizeof(CmdDraw) + 3u * sizeof(CVert)
-                        + 8u + sizeof(CmdPresent)] = {0};
+    /* Reserve space for the optional aligned 2x2 RGBA8 mip upload. The
+     * texture is generated, not read from a proprietary game installation. */
+    unsigned char bytes[sizeof(CmdTarget) + sizeof(CmdClear) +
+                        sizeof(CmdUploadTex) + 32u + sizeof(CmdDraw) +
+                        3u * sizeof(CVert) + 8u + sizeof(CmdPresent)] = {0};
     CmdTarget target = {0};
     target.h.type = CMD_TARGET;
     target.h.size = (uint32_t)sizeof(target);
@@ -348,10 +351,28 @@ int cricket07_submit_test_triangle_frame(void) {
     offset += sizeof(target);
     memcpy(bytes + offset, &clear, sizeof(clear));
     offset += sizeof(clear);
+    if (with_texture_upload) {
+        size_t upload_length = 0;
+        if (!cricket07_make_test_texture_upload(bytes + offset,
+                                                sizeof(bytes) - offset,
+                                                &upload_length)) return 0;
+        offset += upload_length;
+    }
     memcpy(bytes + offset, &draw, sizeof(draw));
     memcpy(bytes + offset + sizeof(draw), vertices, sizeof(vertices));
     offset += draw_size;
     memcpy(bytes + offset, &present, sizeof(present));
     offset += sizeof(present);
     return cricket07_frame_queue_publish(bytes, offset);
+}
+
+/* Preserve the untextured/legacy staging producer for existing tests. */
+int cricket07_submit_test_triangle_frame(void) {
+    return submit_test_triangle_frame(0);
+}
+
+/* Exercise the exact queued CMD_UPLOAD_TEX -> CMD_DRAW -> Metal path.
+ * No direct Swift texture insertion or game-owned content is required. */
+int cricket07_submit_test_uploaded_texture_frame(void) {
+    return submit_test_triangle_frame(1);
 }
