@@ -93,6 +93,10 @@ jobs:
           xcrun nm -g "$OUT/objects/ios_engine_EngineBootstrap.c.o" > "$OUT/bootstrap-symbols.txt"
           grep -Fq '_cricket07_engine_prepare_host' "$OUT/bootstrap-symbols.txt"
           grep -Fq '_cricket07_engine_host_prepared' "$OUT/bootstrap-symbols.txt"
+          grep -Fq '_cricket07_engine_prepare_guest' "$OUT/bootstrap-symbols.txt"
+          grep -Fq '_cricket07_engine_guest_cpu' "$OUT/bootstrap-symbols.txt"
+          xcrun nm -g "$OUT/objects/runtime_runtime.c.o" > "$OUT/runtime-symbols.txt"
+          grep -Fq '_runtime_try_init' "$OUT/runtime-symbols.txt"
           grep -Fq '_g_render' "$OUT/d3d-backend-symbols.txt"
           grep -Fq '_g_render_gpu' "$OUT/recorder-backend-symbols.txt"
           if grep -Eq '_gpu_(exec|init_native)' "$OUT/recorder-undefined.txt"; then

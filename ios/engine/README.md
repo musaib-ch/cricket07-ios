@@ -38,3 +38,19 @@ without invoking `main()`, SDL, or the game.
 oversized tables, and missing table pointers. This is a startup prerequisite,
 not an engine launch: image loading, guest memory initialization, generated
 function registration, iOS file-system setup and lifecycle remain unconnected.
+
+## Recoverable guest-memory initialization (not game startup)
+
+`runtime_try_init(CPU *)` now reserves the guest address space and initializes
+the CPU/TIB without calling `exit()` if the reservation fails. The original
+`runtime_init()` preserves its fatal launcher behavior. Failed reservations
+leave the CPU and global guest pointer unchanged; repeat initialization is
+rejected to avoid replacing a live mapping. The optional
+`RC_TEST_GUEST_MAP_FAILURE` compile flag exercises the failure path in CI.
+
+`cricket07_engine_prepare_guest()` runs the existing host preparation first,
+then initializes a persistent engine-owned CPU. Its accessor returns NULL until
+the guest is ready, and successful preparation is idempotent. All calls must
+remain on the single future engine startup thread. This is a prerequisite for
+loading the user's executable, not a game launch. On iPhone, successful virtual
+reservation and actual memory pressure must still be verified on device.

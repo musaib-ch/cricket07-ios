@@ -344,15 +344,27 @@ int load_image(const char *path, LoadedImage *out) {
 
 /* ------------------------------------------------------------------ memory + CPU setup */
 
-void runtime_init(CPU *c) {
-    /* +64 KiB so multi-byte accesses straddling 0xFFFFFFFF stay inside the mapping */
-#ifdef __EMSCRIPTEN__
-    g_mem = calloc(1, (size_t)GUEST_SPACE + 0x10000);
-    if (!g_mem) { fprintf(stderr, "cannot allocate guest memory\n"); exit(1); }
+int runtime_try_init(CPU *c) {
+    /* Do not replace a live guest mapping or reset a running CPU. */
+    if (!c || g_mem) return 0;
+    /* +64 KiB so multi-byte accesses straddling 0xFFFFFFFF stay inside the mapping. */
+#if defined(RC_TEST_GUEST_MAP_FAILURE)
+    /* Compile-time fault injection, exercised only by the isolated CI test. */
+    return 0;
+#elif defined(__EMSCRIPTEN__)
+    uint8_t *mem = calloc(1, (size_t)GUEST_SPACE + 0x10000u);
+    if (!mem) return 0;
 #else
-    g_mem = mmap(NULL, GUEST_SPACE + 0x10000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_NORESERVE, -1, 0);
-    if (g_mem == MAP_FAILED) { perror("mmap 4GiB guest space"); exit(1); }
+    int flags = MAP_PRIVATE | MAP_ANON;
+#ifdef MAP_NORESERVE
+    flags |= MAP_NORESERVE;
 #endif
+    uint8_t *mem = mmap(NULL, (size_t)GUEST_SPACE + 0x10000u,
+                        PROT_READ | PROT_WRITE, flags, -1, 0);
+    if (mem == MAP_FAILED) return 0;
+#endif
+    /* Commit the global pointer only after the reservation succeeds. */
+    g_mem = mem;
     memset(c, 0, sizeof *c);
     c->esp = GUEST_STACK_TOP;
     c->fpu_cw = 0x027f; /* MSVC default: 53-bit precision, round to nearest, exceptions masked */
@@ -363,6 +375,14 @@ void runtime_init(CPU *c) {
     W32(GUEST_TIB + 0x18, GUEST_TIB);       /* self pointer */
     W32(GUEST_TIB + 0x04, GUEST_STACK_TOP); /* stack base */
     W32(GUEST_TIB + 0x08, GUEST_STACK_TOP - GUEST_STACK_SIZE);
+    return 1;
+}
+
+void runtime_init(CPU *c) {
+    if (!runtime_try_init(c)) {
+        fprintf(stderr, "cannot initialize guest memory\n");
+        exit(1);
+    }
 }
 
 uint32_t g_heap_next = GUEST_HEAP_BASE;

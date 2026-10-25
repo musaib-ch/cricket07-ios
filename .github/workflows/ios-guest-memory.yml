@@ -1,0 +1,37 @@
+name: Cricket 07 iOS guest memory preflight
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'runtime/runtime.c'
+      - 'runtime/runtime.h'
+      - 'ios/tests/ios_guest_memory_test.c'
+      - '.github/workflows/ios-guest-memory.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guest-memory:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test recoverable guest-memory setup and injected allocation failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal failure; do
+            FLAGS=()
+            if [ "$mode" = failure ]; then
+              FLAGS+=(-DRC_TEST_GUEST_MAP_FAILURE)
+            fi
+            clang -std=gnu11 -O0 -frounding-math -ffunction-sections -fdata-sections \
+              "${FLAGS[@]}" -Iruntime \
+              runtime/runtime.c ios/tests/ios_guest_memory_test.c \
+              -Wl,-dead_strip -lm -o "$RUNNER_TEMP/guest-memory-$mode"
+            "$RUNNER_TEMP/guest-memory-$mode"
+          done
+          echo "Guest mapping and injected failure regression passed (no game assets)." >> "$GITHUB_STEP_SUMMARY"

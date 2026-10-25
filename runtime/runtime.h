@@ -34,6 +34,12 @@ typedef struct { const char *name; GuestFn fn; } ImportHandler;  /* name like "K
 typedef struct { uint32_t image_base, entry, num_imports; } LoadedImage;
 extern uint32_t g_image_lo, g_image_hi;   /* the loaded executable's address range */
 
+/* Recoverable one-time guest address-space allocation and CPU setup.
+ * Returns 0 without modifying the CPU or g_mem if allocation fails, c is
+ * NULL, or memory is already initialized. Call on the game startup thread.
+ * The legacy runtime_init() remains fatal for desktop/wasm launchers.
+ */
+int runtime_try_init(CPU *c);
 void runtime_init(CPU *c);
 void set_import_handlers(ImportHandler *h, uint32_t n);  /* call before load_image */
 int load_image(const char *path, LoadedImage *out);

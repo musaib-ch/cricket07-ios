@@ -1,6 +1,8 @@
 #ifndef CRICKET07_ENGINE_BOOTSTRAP_H
 #define CRICKET07_ENGINE_BOOTSTRAP_H
 
+#include "../../runtime/cpu.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,6 +19,12 @@ extern "C" {
  */
 int cricket07_engine_prepare_host(void);
 int cricket07_engine_host_prepared(void);
+
+/* After host preparation, reserve guest memory and initialize the persistent
+ * CPU state on the same startup thread. Failure is recoverable and retryable.
+ * This does not load or execute the game. */
+int cricket07_engine_prepare_guest(void);
+CPU *cricket07_engine_guest_cpu(void); /* NULL until successful */
 
 #ifdef __cplusplus
 }
