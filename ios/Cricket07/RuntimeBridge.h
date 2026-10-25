@@ -39,6 +39,15 @@ int cricket07_take_viewport_triangle_frame(float *rgba, size_t color_capacity,
                                           Cricket07DrawCall *calls, size_t call_capacity,
                                           size_t *call_count, uint32_t target_width,
                                           uint32_t target_height);
+/// Unlit diagnostic draw path with D3DCOLOR RGBA per vertex, rejecting textured,
+/// lit and pixel-shader draws. All color channels are normalized floats.
+int cricket07_take_colored_viewport_triangle_frame(
+    float *rgba, size_t color_capacity,
+    float *xyzw, size_t vertex_float_capacity,
+    float *diffuse_rgba, size_t diffuse_float_capacity,
+    size_t *vertex_count, unsigned int *frame_number,
+    Cricket07DrawCall *calls, size_t call_capacity, size_t *call_count,
+    uint32_t target_width, uint32_t target_height);
 /// Publish one synthetic CLEAR/DRAW/PRESENT frame through the actual native mailbox.
 int cricket07_submit_test_triangle_frame(void);
 #endif

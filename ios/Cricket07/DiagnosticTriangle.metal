@@ -18,14 +18,12 @@ fragment float4 cricket07_test_fragment(TriangleVertex in [[stage_in]]) {
     return in.color;
 }
 
-struct StagedVertex { float4 position; };
+// Diagnostic unlit diffuse colors, not fixed-function stage emulation.
+struct StagedVertex { float4 position; float4 color; };
 vertex TriangleVertex cricket07_staged_vertex(const device StagedVertex *vertices [[buffer(0)]],
                                              uint id [[vertex_id]]) {
     TriangleVertex out;
     out.position = vertices[id].position;
-    uint corner = id % 3;
-    out.color = float4(0.2 + float(corner == 0) * 0.8,
-                       0.2 + float(corner == 1) * 0.8,
-                       0.2 + float(corner == 2) * 0.8, 1.0);
+    out.color = vertices[id].color;
     return out;
 }

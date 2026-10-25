@@ -45,6 +45,9 @@ int main(void) {
         CVert verts[3] = {0};
         for (size_t j = 0; j < 3; ++j) verts[j].w = 1;
         verts[0].x = -0.5f; verts[1].x = 0.5f; verts[2].y = 0.5f;
+        verts[0].diffuse = 0x80FF0000u;
+        verts[1].diffuse = 0xFF00FF00u;
+        verts[2].diffuse = 0xFF0000FFu;
         memcpy(stream + offset, &draw, sizeof draw);
         memcpy(stream + offset + sizeof draw, verts, sizeof verts);
         offset += stride;
@@ -80,6 +83,40 @@ int main(void) {
     assert(calls[1].state.src_blend == 5 && calls[1].state.dst_blend == 6);
     assert(calls[1].state.blend_op == 1);
     assert(fabs(xyzw[0] - (-0.5f + 1.f / 640.f)) < 0.001);
+
+    /* Opt-in diffuse path must preserve 0xAARRGGBB per vertex for two
+     * independent draws, without interpreting them as texture/shader output. */
+    float diffuse[24] = {0};
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(cricket07_take_colored_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, &nverts, &frame,
+        calls, 2, &ncalls, 1280, 960));
+    assert(nverts == 6 && ncalls == 2);
+    assert(fabsf(diffuse[0] - 1.0f) < 0.0001f);
+    assert(diffuse[1] == 0.0f && diffuse[2] == 0.0f);
+    assert(fabsf(diffuse[3] - 128.0f / 255.0f) < 0.0001f);
+    assert(diffuse[4] == 0.0f && diffuse[5] == 1.0f);
+    assert(diffuse[10] == 1.0f && diffuse[11] == 1.0f);
+    assert(fabsf(diffuse[12] - 1.0f) < 0.0001f);
+
+    /* Color buffer under-capacity must fail without writing past it. */
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(!cricket07_take_colored_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 23, &nverts, &frame,
+        calls, 2, &ncalls, 1280, 960));
+
+    /* Do not silently render a texture-bound draw as diffuse-only. */
+    const size_t second_offset = sizeof(CmdTarget) + sizeof(CmdClear) + stride;
+    CmdDraw texture_draw = {0};
+    memcpy(&texture_draw, stream + second_offset, sizeof texture_draw);
+    texture_draw.slot_kind[0] = TS_TEX;
+    memcpy(stream + second_offset, &texture_draw, sizeof texture_draw);
+    assert(cricket07_frame_queue_publish(stream, offset));
+    assert(!cricket07_take_colored_viewport_triangle_frame(
+        color, 4, xyzw, 24, diffuse, 24, &nverts, &frame,
+        calls, 2, &ncalls, 1280, 960));
+    texture_draw.slot_kind[0] = TS_NONE;
+    memcpy(stream + second_offset, &texture_draw, sizeof texture_draw);
 
     /* Reject a second draw when the metadata array can hold only one. */
     assert(cricket07_frame_queue_publish(stream, offset));

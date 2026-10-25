@@ -17,9 +17,11 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                                     int transform_positions,
                                     Cricket07DrawCall *calls, size_t call_capacity,
                                     size_t *call_count, uint32_t target_width,
-                                    uint32_t target_height) {
+                                    uint32_t target_height,
+                                    float *diffuse_rgba, size_t diffuse_float_capacity) {
     if (!rgba || color_capacity < 4 || !xyzw || !vertex_count || !frame_number) return 0;
     if (calls && (!call_count || !call_capacity || !target_width || !target_height)) return 0;
+    if (diffuse_rgba && diffuse_float_capacity < 4u) return 0;
     const size_t limit = 16u * 1024u * 1024u;
     unsigned char *bytes = malloc(limit);
     if (!bytes) return 0;
@@ -78,6 +80,31 @@ static int take_triangle_frame_impl(float *rgba, size_t color_capacity,
                     ok = 0; break;
                 }
             }
+            /* Unlit diagnostic diffuse colors. CVert.diffuse is D3DCOLOR
+             * 0xAARRGGBB. Do not misrepresent textured, lit or shader draws
+             * as correctly shaded geometry in this narrow staging path. */
+            if (diffuse_rgba) {
+                CmdDraw draw;
+                memcpy(&draw, item, sizeof(draw)); /* validated by extractor */
+                if (draw.pixel_shader || draw.u.flags[3] ||
+                    draw.slot_kind[0] || draw.slot_kind[1] ||
+                    draw.slot_kind[2] || draw.slot_kind[3] ||
+                    vertices > diffuse_float_capacity / 4u ||
+                    added > diffuse_float_capacity / 4u - vertices) {
+                    ok = 0; break;
+                }
+                const unsigned char *source = item + sizeof(CmdDraw);
+                for (size_t i = 0; i < added; ++i) {
+                    CVert vertex;
+                    memcpy(&vertex, source + i * sizeof(CVert), sizeof(vertex));
+                    uint32_t packed = vertex.diffuse;
+                    float *out = diffuse_rgba + (vertices + i) * 4u;
+                    out[0] = (float)((packed >> 16) & 255u) / 255.0f;
+                    out[1] = (float)((packed >> 8) & 255u) / 255.0f;
+                    out[2] = (float)(packed & 255u) / 255.0f;
+                    out[3] = (float)((packed >> 24) & 255u) / 255.0f;
+                }
+            }
             if (calls && ok) {
                 if (!logical_width || !logical_height || n_calls >= call_capacity ||
                     vertices > UINT32_MAX || added > UINT32_MAX - vertices) {
@@ -125,7 +152,7 @@ int cricket07_take_triangle_frame(float *rgba, size_t color_capacity,
                                   float *xyzw, size_t vertex_float_capacity,
                                   size_t *vertex_count, unsigned int *frame_number) {
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
-                                    vertex_count, frame_number, 0, NULL, 0, NULL, 0, 0);
+                                    vertex_count, frame_number, 0, NULL, 0, NULL, 0, 0, NULL, 0);
 }
 
 /* Metal consumer: reject unsupported transforms instead of drawing raw D3D
@@ -134,7 +161,7 @@ int cricket07_take_transformed_triangle_frame(float *rgba, size_t color_capacity
                                               float *xyzw, size_t vertex_float_capacity,
                                               size_t *vertex_count, unsigned int *frame_number) {
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
-                                    vertex_count, frame_number, 1, NULL, 0, NULL, 0, 0);
+                                    vertex_count, frame_number, 1, NULL, 0, NULL, 0, 0, NULL, 0);
 }
 
 
@@ -148,7 +175,24 @@ int cricket07_take_viewport_triangle_frame(float *rgba, size_t color_capacity,
     if (!calls || !call_count) return 0;
     return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
                                     vertex_count, frame_number, 1, calls, call_capacity,
-                                    call_count, target_width, target_height);
+                                    call_count, target_width, target_height, NULL, 0);
+}
+
+/* New opt-in diagnostic path: preserves per-vertex D3DCOLOR diffuse
+ * alongside transformed positions and per-draw state. This is NOT a
+ * fixed-function texture-stage or pixel-shader implementation. */
+int cricket07_take_colored_viewport_triangle_frame(
+    float *rgba, size_t color_capacity,
+    float *xyzw, size_t vertex_float_capacity,
+    float *diffuse_rgba, size_t diffuse_float_capacity,
+    size_t *vertex_count, unsigned int *frame_number,
+    Cricket07DrawCall *calls, size_t call_capacity, size_t *call_count,
+    uint32_t target_width, uint32_t target_height) {
+    if (!calls || !call_count || !diffuse_rgba) return 0;
+    return take_triangle_frame_impl(rgba, color_capacity, xyzw, vertex_float_capacity,
+                                    vertex_count, frame_number, 1, calls, call_capacity,
+                                    call_count, target_width, target_height,
+                                    diffuse_rgba, diffuse_float_capacity);
 }
 
 /* Synthetic complete command stream, exercising the same mailbox and
@@ -187,6 +231,9 @@ int cricket07_submit_test_triangle_frame(void) {
     vertices[0].x = -0.7f; vertices[0].y = -0.55f; vertices[0].w = 1.0f;
     vertices[1].x =  0.7f; vertices[1].y = -0.55f; vertices[1].w = 1.0f;
     vertices[2].x =  0.0f; vertices[2].y =  0.7f;  vertices[2].w = 1.0f;
+    vertices[0].diffuse = 0xFFFF3333u;
+    vertices[1].diffuse = 0xFF33CC66u;
+    vertices[2].diffuse = 0xFF4D80FFu;
 
     CmdPresent present = {0};
     present.h.type = CMD_PRESENT;

@@ -181,6 +181,7 @@ struct MetalSurfaceView: UIViewRepresentable {
             if let device = view.device {
                 var color = [Float](repeating: 0, count: 4)
                 var vertices = [Float](repeating: 0, count: 4096)
+                var diffuse = [Float](repeating: 0, count: 4096)
                 var count = 0
                 var frame: UInt32 = 0
                 var calls = [Cricket07DrawCall](repeating: Cricket07DrawCall(), count: 64)
@@ -191,17 +192,27 @@ struct MetalSurfaceView: UIViewRepresentable {
                       pixelWidth <= 16384 && pixelHeight <= 16384 else { return }
                 let found = color.withUnsafeMutableBufferPointer { c in
                     vertices.withUnsafeMutableBufferPointer { v in
-                        calls.withUnsafeMutableBufferPointer { d in
-                            cricket07_take_viewport_triangle_frame(
-                                c.baseAddress, c.count, v.baseAddress, v.count,
-                                &count, &frame, d.baseAddress, d.count, &callCount,
-                                UInt32(pixelWidth), UInt32(pixelHeight)) == 1
+                        diffuse.withUnsafeMutableBufferPointer { colors in
+                            calls.withUnsafeMutableBufferPointer { d in
+                                cricket07_take_colored_viewport_triangle_frame(
+                                    c.baseAddress, c.count, v.baseAddress, v.count,
+                                    colors.baseAddress, colors.count,
+                                    &count, &frame, d.baseAddress, d.count, &callCount,
+                                    UInt32(pixelWidth), UInt32(pixelHeight)) == 1
+                            }
                         }
                     }
                 }
                 if found && count > 0 {
-                    let required = count * 4
-                    let active = Array(vertices.prefix(required))
+                    // Metal receives tightly packed position+diffuse float4 pairs.
+                    // C validates both arrays before this upload.
+                    var active = [Float](repeating: 0, count: count * 8)
+                    for i in 0..<count {
+                        for channel in 0..<4 {
+                            active[i * 8 + channel] = vertices[i * 4 + channel]
+                            active[i * 8 + 4 + channel] = diffuse[i * 4 + channel]
+                        }
+                    }
                     let buffer = active.withUnsafeBytes { bytes -> MTLBuffer? in
                         guard let base = bytes.baseAddress else { return nil }
                         return device.makeBuffer(bytes: base, length: bytes.count, options: [])
@@ -215,7 +226,7 @@ struct MetalSurfaceView: UIViewRepresentable {
                         if !hasReceivedDraw {
                             hasReceivedDraw = true
                             DispatchQueue.main.async { [weak self] in
-                                self?.status.wrappedValue = "Diagnostic CMD_DRAW transformed to Metal clip space"
+                                self?.status.wrappedValue = "Diagnostic CMD_DRAW: transformed positions and diffuse colors"
                             }
                         }
                     }
