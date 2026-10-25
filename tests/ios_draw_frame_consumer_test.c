@@ -38,6 +38,24 @@ int main(void) {
     assert(fabsf(xyzw[4] - (0.7f + 1.f / 640.f)) < 0.0001f);
     assert(xyzw[3] == 1.f && xyzw[7] == 1.f && xyzw[11] == 1.f);
 
+    /* The Metal path retains each draw's own viewport and vertex range. */
+    assert(cricket07_submit_test_triangle_frame() == 1);
+    Cricket07DrawCall calls[2] = {0};
+    size_t call_count = 0;
+    assert(cricket07_take_viewport_triangle_frame(rgba, 4, xyzw, 12, &count,
+                                                  &frame, calls, 2, &call_count,
+                                                  1280, 960) == 1);
+    assert(count == 3 && call_count == 1 && frame == 7);
+    assert(calls[0].first_vertex == 0 && calls[0].vertex_count == 3);
+    assert(fabs(calls[0].viewport.width - 1280.) < 0.001);
+    assert(fabs(calls[0].viewport.height - 960.) < 0.001);
+    assert(calls[0].viewport.min_depth == 0 && calls[0].viewport.max_depth == 1);
+    assert(cricket07_submit_test_triangle_frame() == 1);
+    assert(cricket07_take_viewport_triangle_frame(rgba, 4, xyzw, 12, &count,
+                                                  &frame, calls, 0, &call_count,
+                                                  1280, 960) == 0);
+    cricket07_frame_queue_reset();
+
     /* Two sequential CMD_DRAW commands must combine into one Metal buffer. */
     {
         const size_t draw_size = (sizeof(CmdDraw) + 3u * sizeof(CVert) + 7u) & ~(size_t)7u;
