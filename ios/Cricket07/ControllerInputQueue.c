@@ -22,11 +22,12 @@ static void append(uint16_t usage, int pressed) {
 static void release_all(void) {
     head = 0;
     count = 0;
+    /* Release EVERY mapped key. A key-up event may have been queued after
+     * its key-down was already consumed, and dropping that pending key-up
+     * would otherwise leave the game holding a key indefinitely. */
     for (size_t i = 0; i < KEY_COUNT; ++i) {
-        if (held[i]) {
-            append(keys[i].hid, 0);
-            held[i] = 0;
-        }
+        append(keys[i].hid, 0);
+        held[i] = 0;
     }
 }
 
