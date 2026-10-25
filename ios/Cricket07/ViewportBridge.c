@@ -69,3 +69,27 @@ int cricket07_resolve_draw_state(const CmdDraw *draw, Cricket07DrawState *out) {
     *out = state;
     return 1;
 }
+
+/* Stage-0 D3DTOP_MODULATE only: texture * diffuse/current.
+ * Direct3D argument 2 is TEXTURE; 0 and 1 are DIFFUSE/CURRENT.
+ * This deliberately does not attempt general fixed-function emulation.
+ * Sampler key 0 maps to nearest filtering and clamp in the reference
+ * WebGPU executor. Missing/unsupported stages must not be misrendered. */
+int cricket07_resolve_texture_binding(const CmdDraw *draw, uint32_t *texture_id) {
+    if (!draw || !texture_id) return 0;
+    *texture_id = 0;
+    for (unsigned i = 1; i < 4; ++i)
+        if (draw->slot_kind[i] != TS_NONE) return 0;
+    if (draw->slot_kind[0] == TS_NONE) return 1;
+    if (draw->slot_kind[0] != TS_TEX || !draw->slot_id[0] ||
+        draw->pixel_shader || draw->u.flags[1] ||
+        draw->u.flags[2] || draw->u.flags[3] ||
+        draw->samp_key[0] != 0 || draw->u.st1[0] != 1 ||
+        draw->u.st0[0] != 4 || draw->u.st0[1] != 2 ||
+        (draw->u.st0[2] != 0 && draw->u.st0[2] != 1) ||
+        draw->u.st0[3] != 4 || draw->u.st0b[0] != 2 ||
+        (draw->u.st0b[1] != 0 && draw->u.st0b[1] != 1) ||
+        draw->u.st0b[2] != 0) return 0;
+    *texture_id = draw->slot_id[0];
+    return 1;
+}
