@@ -37,4 +37,12 @@ jobs:
             -Iios/Cricket07 -c ios/Cricket07/FrameQueue.c \
             -o "$RUNNER_TEMP/iosrec/FrameQueue.o"
           xcrun lipo -info "$RUNNER_TEMP/iosrec/render_rec.o"
-          echo "Opt-in iOS recorder transport compilation passed. This is not a linked game." >> "$GITHUB_STEP_SUMMARY"
+          # iOS recorder must never depend on desktop wgpu entry points.
+          if xcrun nm -u "$RUNNER_TEMP/iosrec/render_rec.o" | grep -E '_(gpu_init_native|gpu_exec)
+; then
+            echo "iOS recorder still references desktop GPU initialization/execution" >&2
+            exit 1
+          fi
+          xcrun nm -u "$RUNNER_TEMP/iosrec/render_rec.o" | grep -q '_cricket07_frame_queue_publish
+
+          echo "iOS recorder transport compiles without desktop GPU dependencies. Synchronous GPU readback remains unsupported; no game engine is linked." >> "$GITHUB_STEP_SUMMARY"
