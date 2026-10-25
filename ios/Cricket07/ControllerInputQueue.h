@@ -17,14 +17,14 @@ typedef struct {
 } Cricket07HIDEvent;
 
 /* Returns 1 when a state change is queued; 0 for unknown/duplicate keys or
- * overflow. On overflow, pending events are replaced with key releases so
+ * overflow. On overflow, pending events are replaced with releases for all mapped keys so
  * a later game-thread consumer cannot retain a permanently held button. */
 int cricket07_controller_enqueue_vk(uint16_t virtual_key, int pressed);
 
 /* Consume up to capacity events in FIFO order. No heap allocation. */
 size_t cricket07_controller_drain(Cricket07HIDEvent *events, size_t capacity);
 
-/* Clear queued input and publish releases for every currently held key. */
+/* Clear queued input and publish releases for all supported keys. */
 void cricket07_controller_reset(void);
 
 #ifdef __cplusplus
