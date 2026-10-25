@@ -40,7 +40,7 @@ struct MetalSurfaceView: UIViewRepresentable {
     final class Coordinator: NSObject, MTKViewDelegate {
         private var queue: MTLCommandQueue?
         private var testPipeline: MTLRenderPipelineState?
-        private var diagnosticDepthState: MTLDepthStencilState?
+        private var depthStates: [UInt32: MTLDepthStencilState] = [:]
         private var stagedVertices: MTLBuffer?
         private var stagedVertexCount = 0
         private var stagedCalls: [Cricket07DrawCall] = []
@@ -64,10 +64,6 @@ struct MetalSurfaceView: UIViewRepresentable {
                 descriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
                 descriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
                 testPipeline = try? device.makeRenderPipelineState(descriptor: descriptor)
-                let depth = MTLDepthStencilDescriptor()
-                depth.depthCompareFunction = .lessEqual
-                depth.isDepthWriteEnabled = true
-                diagnosticDepthState = device.makeDepthStencilState(descriptor: depth)
             }
             // Queue a complete synthetic draw frame. Only the supported
             // diagnostic command subset is consumed by this Metal view.
@@ -75,6 +71,34 @@ struct MetalSurfaceView: UIViewRepresentable {
             status.wrappedValue = submitted
                 ? "Metal initialized; diagnostic draw frame queued"
                 : "Metal initialized; diagnostic draw frame failed"
+        }
+
+        // Cache immutable Metal depth states. Direct3D compare values are
+        // normalized and validated by the C draw-state bridge.
+        private func depthState(for state: Cricket07DrawState,
+                                device: MTLDevice) -> MTLDepthStencilState? {
+            let key = state.depth_compare * 2 + state.depth_write
+            if let cached = depthStates[key] { return cached }
+            let compare: MTLCompareFunction
+            switch state.depth_compare {
+            case 1: compare = .never
+            case 2: compare = .less
+            case 3: compare = .equal
+            case 4: compare = .lessEqual
+            case 5: compare = .greater
+            case 6: compare = .notEqual
+            case 7: compare = .greaterEqual
+            case 8: compare = .always
+            default: return nil
+            }
+            let descriptor = MTLDepthStencilDescriptor()
+            descriptor.depthCompareFunction = compare
+            descriptor.isDepthWriteEnabled = state.depth_write != 0
+            guard let result = device.makeDepthStencilState(descriptor: descriptor) else {
+                return nil
+            }
+            depthStates[key] = result
+            return result
         }
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -134,11 +158,19 @@ struct MetalSurfaceView: UIViewRepresentable {
             if let testPipeline, let stagedVertices, stagedVertexCount > 0,
                !stagedCalls.isEmpty {
                 encoder.setRenderPipelineState(testPipeline)
-                if let diagnosticDepthState {
-                    encoder.setDepthStencilState(diagnosticDepthState)
-                }
                 encoder.setVertexBuffer(stagedVertices, offset: 0, index: 0)
+                encoder.setFrontFacing(.clockwise)
                 for call in stagedCalls {
+                    guard let device = view.device,
+                          let depthState = depthState(for: call.state, device: device) else {
+                        continue
+                    }
+                    encoder.setDepthStencilState(depthState)
+                    switch call.state.cull_mode {
+                    case 1: encoder.setCullMode(.front)
+                    case 2: encoder.setCullMode(.back)
+                    default: encoder.setCullMode(.none)
+                    }
                     let vp = call.viewport
                     encoder.setViewport(MTLViewport(originX: vp.x, originY: vp.y,
                                                     width: vp.width, height: vp.height,
