@@ -12,6 +12,7 @@ on:
       - 'ios/Cricket07/FrameQueue.c'
       - 'ios/Cricket07/RuntimeBridge.h'
       - 'tests/ios_draw_frame_consumer_test.c'
+      - 'tests/ios_multi_viewport_test.c'
       - '.github/workflows/ios-draw-frame-consumer.yml'
   workflow_dispatch:
 permissions:
@@ -32,6 +33,13 @@ jobs:
             tests/ios_draw_frame_consumer_test.c \
             -o "$RUNNER_TEMP/draw-frame-tests"
           "$RUNNER_TEMP/draw-frame-tests"
+          clang -std=c11 -Wall -Wextra -Werror -Iios/Cricket07 -Ihost \
+            ios/Cricket07/DrawFrameConsumer.c \
+            ios/Cricket07/TriangleStaging.c ios/Cricket07/VertexTransform.c \
+            ios/Cricket07/ViewportBridge.c ios/Cricket07/FrameQueue.c \
+            tests/ios_multi_viewport_test.c \
+            -o "$RUNNER_TEMP/multi-viewport-tests"
+          "$RUNNER_TEMP/multi-viewport-tests"
       - name: Cross compile draw consumer for iPhone ARM64
         shell: bash
         run: |
