@@ -9,6 +9,7 @@ on:
       - 'ios/Cricket07/ControllerInputQueue.*'
       - 'ios/Cricket07/ControllerInputPump.*'
       - 'ios/engine/ControllerDirectInputAdapter.*'
+      - 'ios/engine/EngineRenderBackend.*'
       - '.github/workflows/ios-engine-library.yml'
   workflow_dispatch:
 
@@ -47,6 +48,7 @@ jobs:
             ios/Cricket07/ControllerInputQueue.c
             ios/Cricket07/ControllerInputPump.c
             ios/engine/ControllerDirectInputAdapter.c
+            ios/engine/EngineRenderBackend.c
           )
           for src in "${SOURCES[@]}"; do
             object="$OUT/objects/${src//\//_}.o"
@@ -64,12 +66,16 @@ jobs:
           xcrun nm -g "$OUT/objects/ios_engine_ControllerDirectInputAdapter.c.o" > "$OUT/adapter-symbols.txt"
           xcrun nm -g "$OUT/objects/host_input.c.o" > "$OUT/input-symbols.txt"
           xcrun nm -u "$OUT/objects/host_render_rec.c.o" > "$OUT/recorder-undefined.txt"
+          xcrun nm -g "$OUT/objects/ios_engine_EngineRenderBackend.c.o" > "$OUT/backend-selection-symbols.txt"
+          xcrun nm -g "$OUT/objects/host_d3d8.c.o" > "$OUT/d3d-backend-symbols.txt"
+          xcrun nm -g "$OUT/objects/host_render_rec.c.o" > "$OUT/recorder-backend-symbols.txt"
           xcrun nm -g "$OUT/objects/ios_Cricket07_FrameQueue.c.o" > "$OUT/frame-queue-symbols.txt"
           cat "$OUT/present-undefined.txt"
           cat "$OUT/adapter-symbols.txt"
           cat "$OUT/input-symbols.txt"
           cat "$OUT/recorder-undefined.txt"
           cat "$OUT/frame-queue-symbols.txt"
+          cat "$OUT/backend-selection-symbols.txt"
           grep -Fq '_cricket07_controller_pump_directinput' "$OUT/present-undefined.txt"
           grep -Fq '_cricket07_controller_pump_directinput' "$OUT/adapter-symbols.txt"
           grep -Fq '_input_key_hid' "$OUT/input-symbols.txt"
@@ -77,6 +83,9 @@ jobs:
           # desktop wgpu. Verify both producer and mailbox definition.
           grep -Fq '_cricket07_frame_queue_publish' "$OUT/recorder-undefined.txt"
           grep -Fq '_cricket07_frame_queue_publish' "$OUT/frame-queue-symbols.txt"
+          grep -Fq '_cricket07_engine_select_ios_recorder' "$OUT/backend-selection-symbols.txt"
+          grep -Fq '_g_render' "$OUT/d3d-backend-symbols.txt"
+          grep -Fq '_g_render_gpu' "$OUT/recorder-backend-symbols.txt"
           if grep -Eq '_gpu_(exec|init_native)' "$OUT/recorder-undefined.txt"; then
             echo 'Engine recorder unexpectedly references desktop GPU' >&2
             exit 1
@@ -91,7 +100,7 @@ jobs:
             echo "Compiled ${#SOURCES[@]} C translation units for $TARGET."
             echo "Archive: libcricket07host-$SDK.a"
             echo
-            echo "Includes iOS frame mailbox and recorder transport (no desktop GPU executor)."
+            echo "Includes iOS frame mailbox, recorder transport, and an explicit opt-in backend selection API (no desktop GPU executor)."
             echo "This is an unlinked intermediate library, NOT a playable engine or IPA."
             echo "Still missing: generated Cricket 07 game functions, live Metal command coverage, iOS game lifecycle integration, game assets, and final app linkage."
           } >> "$GITHUB_STEP_SUMMARY"

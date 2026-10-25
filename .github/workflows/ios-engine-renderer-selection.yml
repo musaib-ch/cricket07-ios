@@ -1,0 +1,41 @@
+name: iOS engine renderer selection
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/EngineRenderBackend.*'
+      - 'ios/tests/ios_engine_renderer_selection_test.c'
+      - '.github/workflows/ios-engine-renderer-selection.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test enabled iOS frame recorder selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=gnu11 -Wall -Wextra -Werror \
+            -DCRICKET07_IOS_GAME -DRC_IOS_FRAME_TRANSPORT=1 \
+            -Iruntime -Ihost -Iios/engine \
+            ios/engine/EngineRenderBackend.c \
+            ios/tests/ios_engine_renderer_selection_test.c \
+            -o "$RUNNER_TEMP/renderer-enabled"
+          "$RUNNER_TEMP/renderer-enabled"
+      - name: Verify selection is disabled without iOS transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=gnu11 -Wall -Wextra -Werror \
+            -Iruntime -Ihost -Iios/engine \
+            ios/engine/EngineRenderBackend.c \
+            ios/tests/ios_engine_renderer_selection_test.c \
+            -o "$RUNNER_TEMP/renderer-disabled"
+          "$RUNNER_TEMP/renderer-disabled"
