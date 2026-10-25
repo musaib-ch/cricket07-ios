@@ -42,3 +42,20 @@ int cricket07_resolve_viewport(const CmdDraw *draw,
     *out = staged;
     return 1;
 }
+
+/* Direct3D 8 depth comparisons are 1..8. The existing WebGPU backend
+ * disables depth writes when depth testing is disabled, regardless of zwrite.
+ * Culling matches its clockwise-front convention.
+ */
+int cricket07_resolve_draw_state(const CmdDraw *draw, Cricket07DrawState *out) {
+    if (!draw || !out || draw->key.zen > 1u || draw->key.zwrite > 1u ||
+        draw->key.cull > 3u ||
+        (draw->key.zen && (draw->key.zfunc < 1u || draw->key.zfunc > 8u)))
+        return 0;
+    Cricket07DrawState state = {0};
+    state.depth_compare = draw->key.zen ? draw->key.zfunc : 8u;
+    state.depth_write = draw->key.zen && draw->key.zwrite ? 1u : 0u;
+    state.cull_mode = draw->key.cull == 2u ? 1u : draw->key.cull == 3u ? 2u : 0u;
+    *out = state;
+    return 1;
+}
