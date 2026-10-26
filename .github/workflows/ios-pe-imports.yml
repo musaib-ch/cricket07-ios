@@ -1,0 +1,32 @@
+name: Cricket 07 iOS PE import metadata preflight
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/PEImportsPreflight.*'
+      - 'ios/engine/PEPreflight.*'
+      - 'ios/tests/ios_pe_imports_test.c'
+      - '.github/workflows/ios-pe-imports.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import-preflight:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate synthetic PE import metadata with sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/PEPreflight.c ios/engine/PEImportsPreflight.c \
+            ios/tests/ios_pe_imports_test.c \
+            -o "$RUNNER_TEMP/pe-imports-test"
+          "$RUNNER_TEMP/pe-imports-test"
+          echo 'Synthetic PE import metadata checks passed with ASan/UBSan. No game assets used.' >> "$GITHUB_STEP_SUMMARY"
