@@ -44,6 +44,17 @@ final class Boundary07Tests: XCTestCase {
         XCTAssertNil(storage.current)
     }
 
+    func testGameAssetPathsUseCanonicalRootAndRejectOutsideFiles() throws {
+        let source = try fixture()
+        let alias = temporary.appendingPathComponent("PackageAlias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: source)
+        let canonicalFile = source.appendingPathComponent("Game/Cricket07.exe").resolvingSymlinksInPath()
+        XCTAssertEqual(try LoopbackServer.relativeGamePath(canonicalFile, root: alias.appendingPathComponent("Game")), "Cricket07.exe")
+        XCTAssertEqual(try LoopbackServer.relativeGamePath(alias.appendingPathComponent("Game/Cricket07.exe"), root: source.appendingPathComponent("Game")), "Cricket07.exe")
+        XCTAssertThrowsError(try LoopbackServer.relativeGamePath(source.appendingPathComponent("Runtime/recomp.wasm"), root: source.appendingPathComponent("Game")))
+        XCTAssertThrowsError(try LoopbackServer.relativeGamePath(source.appendingPathComponent("GameOther/file.bin"), root: source.appendingPathComponent("Game")))
+    }
+
     @MainActor func testLocalServerHeadersStreamingAndWKCapabilities() async throws {
         let source = try fixture()
         let storage = try PackageStorage(root: temporary.appendingPathComponent("Storage"))
@@ -51,7 +62,9 @@ final class Boundary07Tests: XCTestCase {
         let bytes = Data((0..<(700 * 1024)).map { UInt8($0 % 251) })
         try bytes.write(to: imported.appendingPathComponent("Game/Data/stream.bin"))
         let web = try XCTUnwrap(Bundle.main.url(forResource: "Web", withExtension: nil))
-        let server = LoopbackServer(webRoot: web, token: "test-token", package: { imported })
+        let alias = temporary.appendingPathComponent("ImportedPackageAlias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: imported)
+        let server = LoopbackServer(webRoot: web, token: "test-token", package: { alias })
         let base: URL = try await withCheckedThrowingContinuation { continuation in server.start(port: 0) { continuation.resume(with: $0) } }
         defer { server.stop() }
         let (body, response) = try await URLSession.shared.data(from: base.appendingPathComponent("game/Data/stream.bin"))
@@ -65,7 +78,14 @@ final class Boundary07Tests: XCTestCase {
         let (_, wrongResponse) = try await URLSession.shared.data(from: wrong)
         XCTAssertEqual((wrongResponse as? HTTPURLResponse)?.statusCode, 404)
         let (manifest, _) = try await URLSession.shared.data(from: base.appendingPathComponent("native-manifest.json"))
-        XCTAssertTrue(String(decoding: manifest, as: UTF8.self).contains("stream.bin"))
+        let manifestObject = try XCTUnwrap(try JSONSerialization.jsonObject(with: manifest) as? [String: Any])
+        let files = try XCTUnwrap(manifestObject["files"] as? [[String: Any]])
+        let paths = Set(files.compactMap { $0["path"] as? String })
+        XCTAssertEqual(paths, Set(["Cricket07.exe", "Data/stream.bin"]))
+        for path in paths {
+            let (_, fileResponse) = try await URLSession.shared.data(from: base.appendingPathComponent("game/" + path))
+            XCTAssertEqual((fileResponse as? HTTPURLResponse)?.statusCode, 200, path)
+        }
 
         let receiver = ProbeReceiver(expectation: expectation(description: "WKWebView capability report"))
         let configuration = WKWebViewConfiguration()

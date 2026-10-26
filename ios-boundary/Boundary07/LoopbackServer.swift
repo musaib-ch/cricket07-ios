@@ -76,14 +76,19 @@ final class LoopbackServer {
         if relative == "native-manifest.json" {
             do {
                 guard let imported = package() else { reply(connection, status: "404 Not Found"); return }
-                let root = imported.appendingPathComponent("Game")
+                // iOS may enumerate /private/var/... while the stored URL uses /var/....
+                // Canonicalize both sides before forming paths relative to Game.
+                let root = imported.appendingPathComponent("Game", isDirectory: true)
+                    .resolvingSymlinksInPath().standardizedFileURL
                 let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
                 guard let entries = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys) else { throw BoundaryError.invalid("Cannot read imported game.") }
                 var files: [[String: Any]] = []
                 for case let file as URL in entries {
                     let values = try file.resourceValues(forKeys: Set(keys))
                     if values.isSymbolicLink == true { throw BoundaryError.invalid("Linked game file.") }
-                    if values.isRegularFile == true { files.append(["path": String(file.path.dropFirst(root.path.count + 1)), "bytes": values.fileSize ?? 0]) }
+                    if values.isRegularFile == true {
+                        files.append(["path": try Self.relativeGamePath(file, root: root), "bytes": values.fileSize ?? 0])
+                    }
                 }
                 let data = try JSONSerialization.data(withJSONObject: ["version": imported.lastPathComponent, "files": files])
                 reply(connection, body: data, type: "application/json")
@@ -105,6 +110,15 @@ final class LoopbackServer {
             self?.stream(handle, connection)
         })
     }
+    static func relativeGamePath(_ file: URL, root: URL) throws -> String {
+        let base = root.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let path = file.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        guard path.count > base.count, Array(path.prefix(base.count)) == base else {
+            throw BoundaryError.invalid("An imported asset is outside the Game folder.")
+        }
+        return path.dropFirst(base.count).joined(separator: "/")
+    }
+
     private func stream(_ file: FileHandle, _ connection: NWConnection) {
         do {
             guard let chunk = try file.read(upToCount: 256 * 1024), !chunk.isEmpty else {
