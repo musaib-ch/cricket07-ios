@@ -49,6 +49,10 @@ const char *import_name(uint32_t addr);
  * Shared by GetProcAddress and COM vtable registration. */
 uint32_t add_dynamic_import(const char *name, GuestFn fn);
 uint32_t runtime_import_slots_remaining(void);
+/* iOS PE loader preflight: ensure enough dispatch-table capacity and no
+ * occupied future import addresses before guest-memory writes. Not a lock;
+ * loader and import registration must remain on one engine thread. */
+int runtime_prepare_import_registration(uint32_t count);
 GuestFn find_import_handler(const char *name);
 extern __thread uint32_t g_import_target;  /* address of the host slot being called (set by call_indirect) */
 uint32_t guest_alloc(uint32_t size);
