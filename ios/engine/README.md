@@ -74,3 +74,20 @@ writes, and has no bounded error path. Before calling it with user files,
 validate all import-table and RVA-to-file mappings and make loading
 recoverable. The caller must enforce the 128 MiB file cap before reading a
 file into memory. No proprietary executable is included or tested.
+
+## PE import metadata validation (read-only)
+
+`cricket07_pe32_imports_preflight()` now validates the PE import
+descriptor terminator, DLL names, import lookup/address table spans,
+hint/name strings, ordinal imports, and a 4096-entry import bound.
+It maps RVAs to actual raw file bytes, rejecting references that exist
+only in zero-filled virtual section tails. Failures leave the caller's
+import count unchanged. The new `ios-pe-imports.yml` regression uses
+synthetic fixtures under AddressSanitizer and UndefinedBehaviorSanitizer.
+Both native engine archives compile the validator.
+
+**Do not pass untrusted executables to `load_image()` yet.** The legacy
+loader is still unchecked, does not call these validators, and can
+abort or corrupt guest memory on malformed data. Its import writes may
+alias other image structures, and loader-side bounds, error recovery,
+and a controlled startup call remain required. No gameplay claim.
