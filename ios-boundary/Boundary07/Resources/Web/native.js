@@ -36,6 +36,4 @@ window.BoundaryNative={
     document.querySelector('#reset').textContent='Import another private bundle';
   }
 };
-const allowedTouch=new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyS','KeyD','KeyA','KeyW','ShiftLeft','Escape']);
-window.boundaryTouch=(code,down)=>{if(!allowedTouch.has(code)||!window.recomp||document.querySelector('dialog[open]'))return;const event=new KeyboardEvent(down?'keydown':'keyup',{code,bubbles:true});window.dispatchEvent(event)};
 window.addEventListener('error',event=>window.webkit?.messageHandlers?.boundary?.postMessage({type:'error',message:event.message}));

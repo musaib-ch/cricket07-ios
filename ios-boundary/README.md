@@ -2,7 +2,18 @@
 
 This is the open-source iOS host for the locally generated Boundary 07 WebAssembly build. The app imports a private folder through Files, verifies the runtime and executable hashes, and serves its resources only through an on-device loopback origin. It never uploads game inputs to GitHub.
 
-The host targets iOS 26 and landscape iPhone/iPad. Touch controls cover directional input, S/D/A/W, Shift and Escape. The upstream browser Gamepad API remains available for controllers, subject to device testing.
+The host targets iOS 26 and landscape iPhone/iPad. Version 0.2.0 (3) uses a pointer-capture touch controller with independent finger ownership. The upstream browser Gamepad API remains available for physical controllers, subject to device testing.
+
+## Touch controls
+
+- The left stick sends eight keyboard directions, including two held arrow keys for diagonals. Keep it held while pressing a face button with another finger. The original game receives keyboard directions rather than proportional analog axes.
+- Xbox-style face layout: A = S, B = D, X = A, Y = W. Small letters show the original keyboard bindings. Assign the keyboard player to your team in the game.
+- LOFT toggles Shift on or off; it stays held through shot presses. START sends Escape, SELECT sends Tab. These are separate buttons.
+- Drag the clear middle area as a relative mouse trackpad. Lift and drag again to move farther; a short stationary tap clicks the left mouse button. This does not require browser pointer lock.
+- Screen: Fit keeps the game's 4:3 proportions. Fill stretches it across the display. Quality: Performance = 960×720, Balanced = 1280×960 (default), Sharp = 1600×1200. Settings persist locally. Viewport sizing follows the visible screen, and controls respect safe areas.
+- Hide controls releases every held touch input and returns direct canvas interaction for external input. Backgrounding, interrupted touches, dialogs and leaving the game release inputs and switch Loft off.
+
+Update the same installed app using the same Sideloadly signing identity and bundle identifier to retain its private imported files. This host-only update needs no replacement game bundle.
 
 ## Install and import
 
@@ -25,6 +36,6 @@ The Windows-generated `recomp.js`/`recomp.wasm` are privately imported at runtim
 
 ## CI evidence
 
-The workflow compiles a physical-device app, tests synthetic private-bundle imports (including corrupted inputs and links), checks local server streaming and headers, and records a simulator WKWebView capability report. No real game files are used in CI. An IPA build, passing unit tests, or a simulator report does not establish gameplay on iPhone 17.
+The workflow compiles a physical-device app, tests synthetic private-bundle imports (including corrupted inputs and links), checks local server streaming and headers, records a simulator WKWebView capability report, and exercises concurrent controller inputs against fake engine exports in WebKit. No real game files are used in CI. An IPA build, passing unit tests, or a simulator report does not establish gameplay on iPhone 17. Simulated pointer tests do not replace physical multitouch checks on the phone.
 
 The original Cricket 07 menus remain EA game content. Boundary 07 supplies the custom launcher and host. Upstream MIT attribution is preserved under `Resources/Web/LICENSE.txt` and About.

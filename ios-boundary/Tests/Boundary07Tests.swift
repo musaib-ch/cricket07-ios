@@ -101,6 +101,40 @@ final class Boundary07Tests: XCTestCase {
         let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
         attachment.name = "Boundary07-simulator-capabilities"; attachment.lifetime = .keepAlways; add(attachment)
         print("BOUNDARY_SIMULATOR_REPORT " + String(decoding: data, as: UTF8.self))
+        // Exercise the shipped controller in real WebKit with fake engine exports.
+        // The synthetic pointer fixture bypasses capture only; physical multitouch needs device testing.
+        _ = try await view.evaluateJavaScript("""
+        document.body.innerHTML='<canvas id="canvas" width="1024" height="768"></canvas>';
+        window.testKeys=new Set();window.testClicks=[];window.testMoves=[];
+        window.recomp={_input_key_hid:(k,d)=>d?testKeys.add(k):testKeys.delete(k),_input_mouse_move:(x,y)=>testMoves.push([x,y]),_input_mouse_button:(b,d)=>testClicks.push([b,d])};
+        Element.prototype.setPointerCapture=function(){};
+        void 0;
+        """)
+        let controls = try String(contentsOf: web.appendingPathComponent("touch-controls.js"), encoding: .utf8)
+        _ = try await view.evaluateJavaScript(controls)
+        let inputResult = try await view.evaluateJavaScript("""
+        (()=>{
+          BoundaryControls.start();
+          const send=(selector,type,id,x,y)=>document.querySelector(selector).dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,clientX:x,clientY:y}));
+          const pad=document.querySelector('.b07-stick').getBoundingClientRect();
+          send('.b07-stick','pointerdown',1,pad.left+pad.width*.15,pad.top+pad.height*.85);
+          send('.b07-a','pointerdown',2,0,0);send('.b07-b','pointerdown',3,0,0);
+          const together=[...testKeys].sort((a,b)=>a-b).join(',');
+          send('.b07-a','pointerup',2,0,0);const independent=[...testKeys].sort((a,b)=>a-b).join(',');
+          send('.b07-stick','pointercancel',1,0,0);send('.b07-b','pointerup',3,0,0);
+          send('.b07-loft','pointerdown',4,0,0);send('.b07-a','pointerdown',5,0,0);send('.b07-a','pointerup',5,0,0);
+          const loftOnly=[...testKeys].join(',');
+          send('.b07-trackpad','pointerdown',6,200,100);send('.b07-trackpad','pointermove',6,220,110);send('.b07-trackpad','pointercancel',6,220,110);
+          BoundaryControls.reset();
+          return {together,independent,loftOnly,released:testKeys.size===0,mouseMoved:testMoves.some(v=>v[0]>0&&v[1]>0)};
+        })()
+        """)
+        let input = try XCTUnwrap(inputResult as? [String: Any])
+        XCTAssertEqual(input["together"] as? String, "7,22,80,81")
+        XCTAssertEqual(input["independent"] as? String, "7,80,81")
+        XCTAssertEqual(input["loftOnly"] as? String, "225")
+        XCTAssertEqual(input["released"] as? Bool, true)
+        XCTAssertEqual(input["mouseMoved"] as? Bool, true)
         view.stopLoading(); configuration.userContentController.removeScriptMessageHandler(forName: "boundary")
     }
 }

@@ -58,16 +58,14 @@ import UniformTypeIdentifiers
             checksPassed = data["allRequiredPassed"] as? Bool == true
             if let bytes = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted, .sortedKeys]), let text = String(data: bytes, encoding: .utf8) { report = text }
             message = checksPassed ? "Required features passed. Real game execution still needs testing." : "This WebKit context is missing a required feature. See the device report."
-        case "running": running = true; message = "WebAssembly runtime started. Menu and match play still need device verification."
+        case "running": webView?.scrollView.isScrollEnabled = false; webView?.scrollView.bounces = false; running = true; message = "WebAssembly runtime started. Menu and match play still need device verification."
         case "error": message = object["message"] as? String ?? "The game runtime stopped."
         case "import": showingWeb = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.pickingFolder = true }
         default: break
         }
     }
-    func key(_ code: String, down: Bool) {
-        let allowed = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyS", "KeyD", "KeyA", "KeyW", "ShiftLeft", "Escape"]
-        guard allowed.contains(code) else { return }
-        webView?.evaluateJavaScript("window.boundaryTouch?.('\(code)',\(down ? "true" : "false"))", completionHandler: nil)
+    func releaseTouchControls() {
+        webView?.evaluateJavaScript("window.BoundaryControls?.reset()", completionHandler: nil)
     }
     var reportURL: URL? {
         guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
@@ -141,56 +139,15 @@ struct PavilionView: View {
 
 struct GameScreen: View {
     @ObservedObject var model: BoundaryModel
-    @State private var touchVisible = true
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             if let base = model.baseURL { BoundaryWebView(model: model, url: base.appendingPathComponent(model.page)).ignoresSafeArea() }
-            if model.running && touchVisible { TouchControls(model: model).padding(.horizontal, 20).padding(.bottom, 12) }
         }.overlay(alignment: .topLeading) {
-            Button { model.showingWeb = false } label: { Label("Pavilion", systemImage: "chevron.left").font(.caption.bold()).padding(9).background(.ultraThinMaterial, in: Capsule()) }
-                .padding(12)
-        }.overlay(alignment: .topTrailing) {
-            if model.running {
-                Button { touchVisible.toggle() } label: { Label("Controls", systemImage: "gamecontroller").font(.caption.bold()).padding(9).background(.ultraThinMaterial, in: Capsule()) }.padding(12)
-            }
+            Button { model.releaseTouchControls(); model.showingWeb = false } label: {
+                Label("Pavilion", systemImage: "chevron.left").font(.caption.bold()).padding(9).background(.ultraThinMaterial, in: Capsule())
+            }.padding(12)
         }.onChange(of: model.running) { _, running in UIApplication.shared.isIdleTimerDisabled = running }
-    }
-}
-
-struct TouchControls: View {
-    @ObservedObject var model: BoundaryModel
-    var body: some View {
-        HStack(alignment: .bottom) {
-            VStack(spacing: 3) {
-                TouchKey(label: "↑", code: "ArrowUp", model: model)
-                HStack(spacing: 3) { TouchKey(label: "←", code: "ArrowLeft", model: model); TouchKey(label: "↓", code: "ArrowDown", model: model); TouchKey(label: "→", code: "ArrowRight", model: model) }
-            }
-            Spacer()
-            HStack(spacing: 6) {
-                TouchKey(label: "Esc", code: "Escape", model: model)
-                TouchKey(label: "W", code: "KeyW", model: model)
-                TouchKey(label: "Loft", code: "ShiftLeft", model: model)
-                TouchKey(label: "A", code: "KeyA", model: model)
-                TouchKey(label: "D", code: "KeyD", model: model)
-                TouchKey(label: "S", code: "KeyS", model: model)
-            }
-        }
-    }
-}
-
-struct TouchKey: View {
-    let label: String
-    let code: String
-    @ObservedObject var model: BoundaryModel
-    @State private var held = false
-    var body: some View {
-        Text(label).font(.system(size: 15, weight: .bold)).frame(width: 43, height: 39)
-            .background(held ? Color(red: 0.83, green: 0.96, blue: 0.36) : Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-            .foregroundStyle(held ? Color.black : Color.white)
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.25)))
-            .accessibilityLabel(label)
-            .gesture(DragGesture(minimumDistance: 0).onChanged { _ in if !held { held = true; model.key(code, down: true) } }
-                .onEnded { _ in held = false; model.key(code, down: false) })
-            .onDisappear { if held { model.key(code, down: false); held = false } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in model.releaseTouchControls() }
+        .onDisappear { model.releaseTouchControls() }
     }
 }

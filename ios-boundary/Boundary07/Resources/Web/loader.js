@@ -241,9 +241,9 @@ async function startAudio(M) {
 
 function sizeCanvas() {
   const canvas = $('canvas');
-  const r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.max(640, Math.round(r.width * dpr));
-  canvas.height = Math.max(480, Math.round(r.height * dpr));
+  const h = window.BoundaryViewport?.height || 960, w = Math.round(h * 4 / 3);
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
 }
 
 // A netplay session: every peer starts from the same empty saves folder, kept apart from this browser's
@@ -304,7 +304,9 @@ async function run(session) {
   });
   const canvas = $('canvas');
   M._rc_gpu_init(canvas.width, canvas.height);
-  new ResizeObserver(() => { sizeCanvas(); M._rc_set_canvas_size(canvas.width, canvas.height); }).observe(canvas);
+  const resize = () => { sizeCanvas(); M._rc_set_canvas_size(canvas.width, canvas.height); };
+  new ResizeObserver(resize).observe(canvas);
+  window.addEventListener('resize', resize);
   hookInput(M, !!session);
   if (session) { session.client.attach(M); showNetStatus(M, session); }
   startAudio(M).catch((e) => console.warn('audio unavailable:', e));
@@ -329,6 +331,7 @@ async function run(session) {
   if (session) setInterval(() => { if (document.hidden) { poll(M); M._rc_gpu_pump(1); } }, 16);
   canvas.focus();
   window.recomp = M;
+  window.BoundaryControls?.start();
   window.webkit?.messageHandlers?.boundary?.postMessage({type:'running'});
 }
 
