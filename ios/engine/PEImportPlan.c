@@ -91,16 +91,20 @@ int cricket07_pe32_stage_imports(const uint8_t *file, size_t length,
                 return 0;
             Cricket07PEStagedImport *e = &plan->entries[count];
             e->iat_rva = iat + 4u * k;
+            int written;
             if (thunk & 0x80000000u) {
-                (void)snprintf(e->name, sizeof e->name, "%s!#%u",
-                               dll, thunk & 0xffffu);
+                written = snprintf(e->name, sizeof e->name, "%s!#%u",
+                                   dll, thunk & 0xffffu);
             } else {
                 char fn[MAX_NAME_BYTES];
                 if (thunk > UINT32_MAX - 2u ||
                     !read_name(file, length, sections, info.section_count,
                                headers, thunk + 2u, fn)) return 0;
-                (void)snprintf(e->name, sizeof e->name, "%s!%s", dll, fn);
+                written = snprintf(e->name, sizeof e->name, "%s!%s", dll, fn);
             }
+            /* The runtime dispatch table also uses a 96-byte name.
+               Reject truncation rather than resolving a different symbol. */
+            if (written < 0 || (size_t)written >= sizeof e->name) return 0;
             ++count;
         }
     }
