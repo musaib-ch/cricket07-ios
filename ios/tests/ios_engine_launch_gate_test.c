@@ -4,6 +4,7 @@
 #include "../engine/EngineLaunchGate.h"
 
 static int loaded, linked, stage_ok, install_ok, resolve_ok, wrong_address;
+static int stage_without_publication, stage_invalid_metadata;
 static int stage_calls, install_calls, resolve_calls;
 
 static void sentinel(CPU *cpu) { (void)cpu; }
@@ -18,8 +19,9 @@ int cricket07_engine_stage_user_game(const char *game, const char *user,
     assert(strcmp(user, "/user") == 0);
     assert(strcmp(exe, "/game/cricket.exe") == 0);
     if (!stage_ok) return 0;
-    loaded = 1;
-    *out = (LoadedImage){0x400000u, 0x401000u, 2u};
+    if (!stage_without_publication) loaded = 1;
+    *out = (LoadedImage){stage_invalid_metadata ? 0u : 0x400000u,
+                         0x401000u, 2u};
     return 1;
 }
 int cricket07_engine_install_linked_translated_functions(void) {
@@ -36,6 +38,7 @@ int cricket07_engine_resolve_loaded_entrypoint(GuestFn *fn, uint32_t *address) {
 
 static void reset(void) {
     loaded = linked = stage_ok = install_ok = resolve_ok = wrong_address = 0;
+    stage_without_publication = stage_invalid_metadata = 0;
     stage_calls = install_calls = resolve_calls = 0;
 }
 
@@ -86,6 +89,26 @@ int main(void) {
     assert(stage_calls == 1 && install_calls == 0);
     assert_untouched(&image, fn, addr);
 
+    /* A staging adapter reporting success without publishing an image
+     * must never trigger the irreversible generated-code registrar. */
+    reset();
+    RESET_OUTPUT();
+    linked = stage_ok = stage_without_publication = 1;
+    assert(run(&image, &fn, &addr) == CRICKET07_LAUNCH_STAGE_FAILED);
+    assert(stage_calls == 1 && install_calls == 0 && resolve_calls == 0);
+    assert_untouched(&image, fn, addr);
+
+    reset();
+    RESET_OUTPUT();
+    linked = stage_ok = stage_invalid_metadata = 1;
+    assert(run(&image, &fn, &addr) == CRICKET07_LAUNCH_STAGE_FAILED);
+    assert(stage_calls == 1 && install_calls == 0 && resolve_calls == 0);
+    assert_untouched(&image, fn, addr);
+
+    reset();
+    RESET_OUTPUT();
+    linked = 1;
+    assert(run(&image, &fn, &addr) == CRICKET07_LAUNCH_STAGE_FAILED);
     stage_ok = 1;
     assert(run(&image, &fn, &addr) == CRICKET07_LAUNCH_REGISTRATION_FAILED);
     assert(stage_calls == 2 && install_calls == 1 && resolve_calls == 0);

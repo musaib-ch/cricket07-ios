@@ -24,6 +24,13 @@ Cricket07LaunchStatus cricket07_engine_prepare_launch(
                                           executable_path, &staged))
         return CRICKET07_LAUNCH_STAGE_FAILED;
 
+    /* Do not run the one-shot registrar unless the loader actually
+     * published a coherent image. A faulty staging adapter must not be
+     * allowed to claim success without publishing guest memory. */
+    if (!cricket07_engine_image_loaded() || staged.image_base == 0 ||
+        staged.entry < staged.image_base)
+        return CRICKET07_LAUNCH_STAGE_FAILED;
+
     /* A failed registrar may have mutated the runtime function table.
      * The staged image is intentionally not rolled back or retried. */
     if (!cricket07_engine_install_linked_translated_functions())

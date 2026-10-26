@@ -23,7 +23,9 @@ typedef enum {
  * one-shot image publication in the diagnostic configuration.
  *
  * READY returns the translated entry callback and address WITHOUT invoking
- * it. Output arguments are unchanged on every failure. Once staging
+ * it. A staging adapter must publish a nonzero, coherent image before
+ * one-shot registration is attempted. Output arguments are unchanged on
+ * every failure. Once staging
  * succeeds, subsequent registration/resolution failures leave the image
  * loaded and must NOT be retried in the same process. This function is
  * not a sandbox, a renderer initialization, or proof of playable gameplay.
