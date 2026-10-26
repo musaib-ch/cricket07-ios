@@ -353,7 +353,7 @@ int load_image(const char *path, LoadedImage *out) {
     for (uint32_t k = 0; k < import_plan->count; ++k) {
         const Cricket07PEStagedImport *entry = &import_plan->entries[k];
         ImportSlot *s = &g_imports[g_nimports];
-        memcpy(s->name, entry->name, sizeof s->name);
+        snprintf(s->name, sizeof s->name, "%s", entry->name);
         GuestFn fn = find_handler(s->name);
         s->fn = fn ? fn : unimplemented_import;
         uint32_t magic = IMPORT_BASE + g_nimports * 16;
