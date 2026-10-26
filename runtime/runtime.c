@@ -38,29 +38,6 @@ void register_function(uint32_t addr, GuestFn fn) {
     }
 }
 
-/* Reserve dispatch-table capacity before publishing any PE image bytes.
- * Call only from the single engine loader thread: other registrations between
- * this check and the image commit would invalidate the reservation.
- * No import slots or guest-memory bytes are changed by this preflight. */
-int runtime_prepare_import_registration(uint32_t count) {
-    if (count > runtime_import_slots_remaining()) return 0;
-    if (!count) return 1;
-    if (!g_fns) {
-        g_fn_cap = 1u << 16;
-        g_fns = calloc(g_fn_cap, sizeof *g_fns);
-        if (!g_fns) return 0;
-    }
-    uint32_t empty = 0;
-    for (uint32_t i = 0; i < g_fn_cap; ++i)
-        if (!g_fns[i].fn) ++empty;
-    if (empty < count) return 0;
-    for (uint32_t i = 0; i < count; ++i) {
-        uint32_t magic = IMPORT_BASE + (g_nimports + i) * 16u;
-        if (lookup_function(magic)) return 0;
-    }
-    return 1;
-}
-
 GuestFn lookup_function(uint32_t addr) {
     if (!g_fns) return NULL;
     uint32_t i = (addr * 2654435761u) & (g_fn_cap - 1);
@@ -299,6 +276,29 @@ static GuestFn find_handler(const char *name) {
 
 uint32_t runtime_import_slots_remaining(void) {
     return g_nimports < RC_IMPORT_SLOT_LIMIT ? RC_IMPORT_SLOT_LIMIT - g_nimports : 0;
+}
+
+/* Reserve dispatch-table capacity before publishing any PE image bytes.
+ * Call only from the single engine loader thread: other registrations between
+ * this check and the image commit would invalidate the reservation.
+ * No import slots or guest-memory bytes are changed by this preflight. */
+int runtime_prepare_import_registration(uint32_t count) {
+    if (count > runtime_import_slots_remaining()) return 0;
+    if (!count) return 1;
+    if (!g_fns) {
+        g_fn_cap = 1u << 16;
+        g_fns = calloc(g_fn_cap, sizeof *g_fns);
+        if (!g_fns) return 0;
+    }
+    uint32_t empty = 0;
+    for (uint32_t i = 0; i < g_fn_cap; ++i)
+        if (!g_fns[i].fn) ++empty;
+    if (empty < count) return 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t magic = IMPORT_BASE + (g_nimports + i) * 16u;
+        if (lookup_function(magic)) return 0;
+    }
+    return 1;
 }
 
 uint32_t add_dynamic_import(const char *name, GuestFn fn) {
