@@ -20,6 +20,9 @@ int main(int argc, char **argv) {
         assert(runtime_import_slots_remaining() == 4096u);
         assert(import_name(IMPORT_BASE) == NULL);
         assert(!runtime_prepare_import_registration(1u));
+        register_function(IMPORT_BASE + 16u, dummy);
+        assert(!runtime_prepare_import_registration(2u));
+        assert(lookup_function(IMPORT_BASE + 16u) == dummy);
         return 0;
     }
     assert(runtime_import_slots_remaining() == 4096u);
@@ -27,10 +30,6 @@ int main(int argc, char **argv) {
     assert(runtime_prepare_import_registration(4096u));
     assert(!runtime_prepare_import_registration(4097u));
     assert(runtime_import_slots_remaining() == 4096u);
-    /* A generated function at a future import trampoline must fail preflight. */
-    register_function(IMPORT_BASE + 16u, dummy);
-    assert(!runtime_prepare_import_registration(2u));
-    assert(lookup_function(IMPORT_BASE + 16u) == dummy);
     assert(add_dynamic_import(NULL, dummy) == 0);
     assert(add_dynamic_import("", dummy) == 0);
     assert(add_dynamic_import("KERNEL32.DLL!Test", NULL) == 0);
