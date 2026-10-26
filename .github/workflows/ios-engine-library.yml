@@ -105,6 +105,8 @@ jobs:
           grep -Fq '_cricket07_engine_host_prepared' "$OUT/bootstrap-symbols.txt"
           grep -Fq '_cricket07_engine_prepare_guest' "$OUT/bootstrap-symbols.txt"
           grep -Fq '_cricket07_engine_guest_cpu' "$OUT/bootstrap-symbols.txt"
+          grep -Fq '_cricket07_engine_load_user_executable' "$OUT/bootstrap-symbols.txt"
+          grep -Fq '_cricket07_engine_resolve_loaded_entrypoint' "$OUT/bootstrap-symbols.txt"
           xcrun nm -g "$OUT/objects/ios_engine_PEPreflight.c.o" | grep -Fq '_cricket07_pe32_preflight'
           xcrun nm -g "$OUT/objects/ios_engine_PEImportsPreflight.c.o" | grep -Fq '_cricket07_pe32_imports_preflight'
           xcrun nm -g "$OUT/objects/ios_engine_PELoadGate.c.o" | grep -Fq '_cricket07_pe32_load_gate'

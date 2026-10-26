@@ -192,3 +192,19 @@ This is **not wired into the SwiftUI app**, does not register generated game
 functions or execute the entry point, and is not a security boundary for
 arbitrary executables. Device memory pressure, imports, Metal rendering,
 controller behavior during gameplay, and gameplay itself remain unverified.
+
+## Non-executing translated entrypoint resolution
+
+`cricket07_engine_resolve_loaded_entrypoint()` checks that the single loaded
+image's entry address is inside its published guest image range and that the
+runtime registry already contains a translated callback at that address. It
+returns the callback and entry address without invoking either. It fails
+without modifying output arguments if no image has loaded, the metadata is
+inconsistent, or generated code has not been registered. The bootstrap CI
+covers absent functions, invalid output pointers, stale image bounds, and
+successful synthetic resolution; both iOS engine archives check the symbol.
+
+**Still missing:** generated Cricket 07 functions are not part of the current
+iOS archive or diagnostic IPA. This gate deliberately cannot create them,
+start gameplay, validate their completeness, or prove Metal/DirectInput
+compatibility. Use only on the dedicated engine thread, not from SwiftUI.

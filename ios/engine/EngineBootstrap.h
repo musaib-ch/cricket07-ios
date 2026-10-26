@@ -37,6 +37,15 @@ CPU *cricket07_engine_guest_cpu(void); /* NULL until successful */
 int cricket07_engine_load_user_executable(const char *absolute_path, LoadedImage *out);
 int cricket07_engine_image_loaded(void);
 
+/* Non-executing gate for a future translated-game startup. Returns 1 only
+ * after a successful image load, when its entry address lies within that
+ * image and has a generated function registered in the runtime. On failure
+ * neither output is modified. Does not register, invoke, or initialize
+ * translated game functions. Call only on the single engine startup thread.
+ * A successful result is not proof that the game can run or render.
+ */
+int cricket07_engine_resolve_loaded_entrypoint(GuestFn *out_fn, uint32_t *out_address);
+
 #ifdef __cplusplus
 }
 #endif

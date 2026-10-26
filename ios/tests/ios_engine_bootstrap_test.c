@@ -7,6 +7,13 @@
 static int calls[8], count;
 static int imports_ok = 1, recorder_ok = 1, memory_ok = 1;
 static int loader_ok = 1, loader_calls;
+static int translated_entry_ready;
+static void synthetic_translated_entry(CPU *cpu) { cpu->eax = 0xC0707u; }
+static void sentinel_entry(CPU *cpu) { (void)cpu; }
+GuestFn lookup_function(uint32_t addr) {
+    return translated_entry_ready && addr == 0x00401000u
+        ? synthetic_translated_entry : NULL;
+}
 uint32_t g_image_lo, g_image_hi;
 
 int load_image(const char *path, LoadedImage *out) {
@@ -46,6 +53,10 @@ int runtime_try_init(CPU *c) {
 int main(void) {
     LoadedImage image = {0x11111111u, 0x22222222u, 0x33333333u};
     assert(!cricket07_engine_image_loaded());
+    GuestFn resolved = sentinel_entry;
+    uint32_t entry_address = 0xfeedbeefu;
+    assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    assert(resolved == sentinel_entry && entry_address == 0xfeedbeefu);
     assert(!cricket07_engine_load_user_executable(NULL, &image));
     assert(!cricket07_engine_load_user_executable("", &image));
     assert(!cricket07_engine_load_user_executable("relative.exe", &image));
@@ -103,6 +114,26 @@ int main(void) {
     assert(loader_calls == 2 && cricket07_engine_image_loaded());
     assert(image.image_base == 0x00400000u && image.entry == 0x00401000u);
     assert(image.num_imports == 1);
+    /* Loading alone cannot imply translated entrypoint readiness. */
+    assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    assert(resolved == sentinel_entry && entry_address == 0xfeedbeefu);
+    translated_entry_ready = 1;
+    assert(!cricket07_engine_resolve_loaded_entrypoint(NULL, &entry_address));
+    assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, NULL));
+    assert(resolved == sentinel_entry && entry_address == 0xfeedbeefu);
+    /* Reject stale or out-of-range image metadata even if a function exists. */
+    g_image_hi = 0x00400080u;
+    assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    g_image_hi = 0x00404000u;
+    g_image_lo = 0x00500000u;
+    assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    g_image_lo = 0x00400000u;
+    assert(resolved == sentinel_entry && entry_address == 0xfeedbeefu);
+    assert(cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    assert(resolved == synthetic_translated_entry && entry_address == 0x00401000u);
+    translated_entry_ready = 0;
+    assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    assert(resolved == synthetic_translated_entry && entry_address == 0x00401000u);
     assert(!cricket07_engine_load_user_executable("/tmp/cricket07-synthetic.exe", &image));
     assert(loader_calls == 2); /* never reload over an active image */
     assert(count == ready_count); /* loader must not reset host or guest */
