@@ -5,6 +5,9 @@
 
 static int loaded, linked, stage_ok, install_ok, resolve_ok, wrong_address;
 static int stage_without_publication, stage_invalid_metadata;
+static int stage_wrong_base, stage_entry_below_base, stage_entry_outside_image;
+static int stage_empty_published_range;
+uint32_t g_image_lo, g_image_hi;
 static int stage_calls, install_calls, resolve_calls;
 
 static void sentinel(CPU *cpu) { (void)cpu; }
@@ -19,9 +22,16 @@ int cricket07_engine_stage_user_game(const char *game, const char *user,
     assert(strcmp(user, "/user") == 0);
     assert(strcmp(exe, "/game/cricket.exe") == 0);
     if (!stage_ok) return 0;
-    if (!stage_without_publication) loaded = 1;
-    *out = (LoadedImage){stage_invalid_metadata ? 0u : 0x400000u,
-                         0x401000u, 2u};
+    if (!stage_without_publication) {
+        loaded = 1;
+        g_image_lo = 0x400000u;
+        g_image_hi = stage_empty_published_range ? g_image_lo : 0x404000u;
+    }
+    *out = (LoadedImage){stage_invalid_metadata ? 0u :
+                         stage_wrong_base ? 0x500000u : 0x400000u,
+                         stage_entry_below_base ? 0x3ff000u :
+                         stage_entry_outside_image ? 0x404000u : 0x401000u,
+                         2u};
     return 1;
 }
 int cricket07_engine_install_linked_translated_functions(void) {
@@ -39,6 +49,9 @@ int cricket07_engine_resolve_loaded_entrypoint(GuestFn *fn, uint32_t *address) {
 static void reset(void) {
     loaded = linked = stage_ok = install_ok = resolve_ok = wrong_address = 0;
     stage_without_publication = stage_invalid_metadata = 0;
+    stage_wrong_base = stage_entry_below_base = stage_entry_outside_image = 0;
+    stage_empty_published_range = 0;
+    g_image_lo = g_image_hi = 0;
     stage_calls = install_calls = resolve_calls = 0;
 }
 
@@ -104,6 +117,23 @@ int main(void) {
     assert(run(&image, &fn, &addr) == CRICKET07_LAUNCH_STAGE_FAILED);
     assert(stage_calls == 1 && install_calls == 0 && resolve_calls == 0);
     assert_untouched(&image, fn, addr);
+
+    /* A published image must match its returned metadata. None of these
+     * malformed states may invoke the irreversible registrar. */
+    for (int scenario = 0; scenario < 4; ++scenario) {
+        reset();
+        RESET_OUTPUT();
+        linked = stage_ok = 1;
+        switch (scenario) {
+            case 0: stage_wrong_base = 1; break;
+            case 1: stage_entry_below_base = 1; break;
+            case 2: stage_entry_outside_image = 1; break;
+            case 3: stage_empty_published_range = 1; break;
+        }
+        assert(run(&image, &fn, &addr) == CRICKET07_LAUNCH_STAGE_FAILED);
+        assert(stage_calls == 1 && install_calls == 0 && resolve_calls == 0);
+        assert_untouched(&image, fn, addr);
+    }
 
     reset();
     RESET_OUTPUT();

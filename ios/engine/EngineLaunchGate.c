@@ -27,8 +27,9 @@ Cricket07LaunchStatus cricket07_engine_prepare_launch(
     /* Do not run the one-shot registrar unless the loader actually
      * published a coherent image. A faulty staging adapter must not be
      * allowed to claim success without publishing guest memory. */
-    if (!cricket07_engine_image_loaded() || staged.image_base == 0 ||
-        staged.entry < staged.image_base)
+    if (!cricket07_engine_image_loaded() || g_image_hi <= g_image_lo ||
+        staged.image_base != g_image_lo ||
+        staged.entry < g_image_lo || staged.entry >= g_image_hi)
         return CRICKET07_LAUNCH_STAGE_FAILED;
 
     /* A failed registrar may have mutated the runtime function table.

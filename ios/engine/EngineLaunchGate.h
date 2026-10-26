@@ -24,7 +24,9 @@ typedef enum {
  *
  * READY returns the translated entry callback and address WITHOUT invoking
  * it. A staging adapter must publish a nonzero, coherent image before
- * one-shot registration is attempted. Output arguments are unchanged on
+ * one-shot registration is attempted. The staged image base and entry
+ * must agree with the published guest range before irreversible function
+ * registration. Output arguments are unchanged on
  * every failure. Once staging
  * succeeds, subsequent registration/resolution failures leave the image
  * loaded and must NOT be retried in the same process. This function is
