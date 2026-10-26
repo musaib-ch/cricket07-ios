@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 
+#ifdef CRICKET07_IOS_GAME
+#include "../ios/engine/PELoadGate.h"
+#endif
+
 uint8_t *g_mem;
 
 /* ------------------------------------------------------------------ function table */
@@ -285,15 +289,36 @@ static uint32_t rd32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | 
 uint32_t g_image_lo, g_image_hi;
 
 int load_image(const char *path, LoadedImage *out) {
+    /* The native iOS path must not touch guest memory before the complete
+       PE/import preflight succeeds. The legacy desktop path retains its
+       original loading semantics, with bounded file reads and cleanup. */
+    if (!path || !out || !g_mem) return -1;
     FILE *f = fopen(path, "rb");
     if (!f) { perror(path); return -1; }
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    if (fseek(f, 0, SEEK_END)) { fclose(f); return -1; }
+    long file_size = ftell(f);
+    if (file_size < 64 || file_size > 128L * 1024L * 1024L ||
+        fseek(f, 0, SEEK_SET)) { fclose(f); return -1; }
+    size_t size = (size_t)file_size;
     uint8_t *file = malloc(size);
-    if (fread(file, 1, size, f) != (size_t)size) { fclose(f); return -1; }
+    if (!file) { fclose(f); return -1; }
+    if (fread(file, 1, size, f) != size) {
+        free(file);
+        fclose(f);
+        return -1;
+    }
     fclose(f);
 
+#ifdef CRICKET07_IOS_GAME
+    Cricket07PEInfo verified;
+    if (!cricket07_pe32_load_gate(file, size, g_nimports, &verified)) {
+        free(file);
+        return -1;
+    }
+    /* The gate also constrains all section/image and import ranges.
+       It is not a substitute for a fully transactional loader. */
+    (void)verified;
+#endif
     const uint8_t *pe = file + rd32(file + 0x3c);
     uint16_t nsec = rd16(pe + 6);
     uint16_t optsz = rd16(pe + 20);
@@ -302,29 +327,39 @@ int load_image(const char *path, LoadedImage *out) {
     uint32_t entry = rd32(opt + 16);
     uint32_t hdr_size = rd32(opt + 60);
     uint32_t imp_rva = rd32(opt + 96 + 8);
+    uint32_t image_size = rd32(opt + 56); /* read before freeing file */
 
     memcpy(HP(image_base), file, hdr_size);
     const uint8_t *sec = opt + optsz;
     for (int i = 0; i < nsec; i++, sec += 40) {
-        uint32_t vsize = rd32(sec + 8), va = rd32(sec + 12), rawsz = rd32(sec + 16), rawptr = rd32(sec + 20);
+        uint32_t vsize = rd32(sec + 8), va = rd32(sec + 12);
+        uint32_t rawsz = rd32(sec + 16), rawptr = rd32(sec + 20);
         uint32_t n = rawsz < vsize ? rawsz : vsize;
         memset(HP(image_base + va), 0, vsize);
         memcpy(HP(image_base + va), file + rawptr, n);
     }
 
-    /* Resolve imports: each IAT slot gets a magic address that dispatches to a host handler. */
+    /* Resolve imports: each IAT slot gets a magic host-dispatch address.
+       The iOS gate validates the complete descriptor and thunk chains first. */
     for (uint32_t d = image_base + imp_rva; R32(d + 12); d += 20) {
         const char *dll = (const char *)HP(image_base + R32(d + 12));
         uint32_t ilt = R32(d) ? R32(d) : R32(d + 16), iat = R32(d + 16);
         for (uint32_t k = 0;; k++) {
             uint32_t thunk = R32(image_base + ilt + 4 * k);
             if (!thunk) break;
+            /* Never index beyond the fixed import-slot table. */
+            if (g_nimports >= sizeof g_imports / sizeof g_imports[0]) {
+                free(file);
+                return -1;
+            }
             ImportSlot *s = &g_imports[g_nimports];
             if (thunk & 0x80000000u)
                 snprintf(s->name, sizeof s->name, "%s!#%u", dll, thunk & 0xffff);
             else
-                snprintf(s->name, sizeof s->name, "%s!%s", dll, (const char *)HP(image_base + thunk + 2));
-            for (char *p = s->name; *p && *p != '!'; p++) *p = (char)toupper((unsigned char)*p);
+                snprintf(s->name, sizeof s->name, "%s!%s", dll,
+                         (const char *)HP(image_base + thunk + 2));
+            for (char *p = s->name; *p && *p != '!'; p++)
+                *p = (char)toupper((unsigned char)*p);
             GuestFn fn = find_handler(s->name);
             s->fn = fn ? fn : unimplemented_import;
             uint32_t magic = IMPORT_BASE + g_nimports * 16;
@@ -336,7 +371,7 @@ int load_image(const char *path, LoadedImage *out) {
     free(file);
     out->image_base = image_base;
     g_image_lo = image_base;
-    g_image_hi = image_base + rd32(opt + 56);   /* SizeOfImage */
+    g_image_hi = image_base + image_size;
     out->entry = image_base + entry;
     out->num_imports = g_nimports;
     return 0;
