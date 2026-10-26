@@ -46,14 +46,14 @@ int main(void) {
     assert(cricket07_pe32_stage_imports(file, sizeof file, 0, plan));
     assert(plan->count == 1);
     assert(plan->entries[0].iat_rva == 0x2050);
-    assert(!strcmp(plan->entries[0].name, "KERNEL32.dll!ExitProcess"));
+    assert(!strcmp(plan->entries[0].name, "KERNEL32.DLL!ExitProcess"));
     /* The staged name is independent of subsequent changes to the source. */
     memset(file + 0x472, 'x', 11);
-    assert(!strcmp(plan->entries[0].name, "KERNEL32.dll!ExitProcess"));
+    assert(!strcmp(plan->entries[0].name, "KERNEL32.DLL!ExitProcess"));
     fixture(file);
     w32(file + 0x440, 0x80000023u);
     assert(cricket07_pe32_stage_imports(file, sizeof file, 4095, plan));
-    assert(!strcmp(plan->entries[0].name, "KERNEL32.dll!#35"));
+    assert(!strcmp(plan->entries[0].name, "KERNEL32.DLL!#35"));
     assert(!cricket07_pe32_stage_imports(file, sizeof file, 4096, plan));
     assert(plan->count == 0);
     fixture(file);
