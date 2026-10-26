@@ -59,7 +59,7 @@ int cricket07_engine_translated_functions_installed(void);
 
 /* Compile-time gate for a generated register_all_functions() symbol.
  * The default diagnostic build returns 0 without a symbol reference.
- * Build with CRICKET07_LINKED_TRANSLATED_REGISTRY only when the generated
+ * Build with CRICKET07_LINKED_TRANSLATED_REGISTRY=1 only when the generated
  * translation objects are explicitly linked into the final application.
  * Linking without those objects will correctly fail at link time.
  */

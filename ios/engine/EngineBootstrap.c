@@ -110,7 +110,7 @@ int cricket07_engine_translated_functions_installed(void) {
  * No translated game code is executed by this adapter.
  */
 int cricket07_engine_linked_translated_functions_available(void) {
-#if defined(CRICKET07_LINKED_TRANSLATED_REGISTRY)
+#if defined(CRICKET07_LINKED_TRANSLATED_REGISTRY) && CRICKET07_LINKED_TRANSLATED_REGISTRY
     return 1;
 #else
     return 0;
@@ -118,7 +118,7 @@ int cricket07_engine_linked_translated_functions_available(void) {
 }
 
 int cricket07_engine_install_linked_translated_functions(void) {
-#if defined(CRICKET07_LINKED_TRANSLATED_REGISTRY)
+#if defined(CRICKET07_LINKED_TRANSLATED_REGISTRY) && CRICKET07_LINKED_TRANSLATED_REGISTRY
     return cricket07_engine_install_translated_functions(register_all_functions);
 #else
     return 0;

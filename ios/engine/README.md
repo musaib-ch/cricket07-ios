@@ -236,7 +236,7 @@ The engine bootstrap now exports
 `cricket07_engine_install_linked_translated_functions()`. The default
 diagnostic build reports no generated registry and does not reference
 `register_all_functions()`. When compiled with
-`CRICKET07_LINKED_TRANSLATED_REGISTRY`, the adapter requires the generated
+`CRICKET07_LINKED_TRANSLATED_REGISTRY=1`, the adapter requires the generated
 symbol at link time and delegates to the existing one-shot registration gate.
 Missing game-derived code cannot silently pass the final link step.
 The macOS bootstrap regression tests both the disabled mode and a
