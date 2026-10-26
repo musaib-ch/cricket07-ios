@@ -110,6 +110,11 @@ final class Boundary07Tests: XCTestCase {
         Element.prototype.setPointerCapture=function(){};
         void 0;
         """)
+        // Pointer coordinates depend on the shipped square stick layout. Without its CSS,
+        // a div expands to the page width and the same gesture points above its centre.
+        let controllerCSS = try String(contentsOf: web.appendingPathComponent("touch-controls.css"), encoding: .utf8)
+        let cssJSON = String(decoding: try JSONSerialization.data(withJSONObject: [controllerCSS]), as: UTF8.self)
+        _ = try await view.evaluateJavaScript("const controllerStyle=document.createElement('style');controllerStyle.textContent=\(cssJSON)[0];document.head.append(controllerStyle);void 0;")
         let controls = try String(contentsOf: web.appendingPathComponent("touch-controls.js"), encoding: .utf8)
         _ = try await view.evaluateJavaScript(controls)
         let inputResult = try await view.evaluateJavaScript("""
@@ -126,10 +131,11 @@ final class Boundary07Tests: XCTestCase {
           const loftOnly=[...testKeys].join(',');
           send('.b07-trackpad','pointerdown',6,200,100);send('.b07-trackpad','pointermove',6,220,110);send('.b07-trackpad','pointercancel',6,220,110);
           BoundaryControls.reset();
-          return {together,independent,loftOnly,released:testKeys.size===0,mouseMoved:testMoves.some(v=>v[0]>0&&v[1]>0)};
+          return {together,independent,loftOnly,stickSquare:pad.width>0&&Math.abs(pad.width-pad.height)<1,released:testKeys.size===0,mouseMoved:testMoves.some(v=>v[0]>0&&v[1]>0)};
         })()
         """)
         let input = try XCTUnwrap(inputResult as? [String: Any])
+        XCTAssertEqual(input["stickSquare"] as? Bool, true)
         XCTAssertEqual(input["together"] as? String, "7,22,80,81")
         XCTAssertEqual(input["independent"] as? String, "7,80,81")
         XCTAssertEqual(input["loftOnly"] as? String, "225")
