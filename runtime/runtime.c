@@ -10,6 +10,7 @@
 #ifdef CRICKET07_IOS_GAME
 #include "../ios/engine/PELoadGate.h"
 #include "../ios/engine/PEImportPlan.h"
+#include "../ios/engine/PEImageStage.h"
 #endif
 
 uint8_t *g_mem;
@@ -341,6 +342,11 @@ int load_image(const char *path, LoadedImage *out) {
        PE/import preflight succeeds. The legacy desktop path retains its
        original loading semantics, with bounded file reads and cleanup. */
     if (!path || !out || !g_mem) return -1;
+#ifdef CRICKET07_IOS_GAME
+    /* One executable per guest lifetime. A second load must not replace
+       a live image or silently invalidate its dispatch registrations. */
+    if (g_image_hi > g_image_lo) return -1;
+#endif
     FILE *f = fopen(path, "rb");
     if (!f) { perror(path); return -1; }
     if (fseek(f, 0, SEEK_END)) { fclose(f); return -1; }
@@ -380,8 +386,25 @@ int load_image(const char *path, LoadedImage *out) {
         free(file);
         return -1;
     }
-    (void)verified;
+    /* Construct the entire image, including all IAT patches, in private
+       memory. Allocation/metadata failures cannot leave partial guest writes. */
+    uint8_t *staged_image = NULL;
+    if (!cricket07_pe32_stage_image(file, size, &verified, import_plan,
+                                   g_nimports, IMPORT_BASE, &staged_image)) {
+        free(import_plan);
+        free(file);
+        return -1;
+    }
 #endif
+#ifdef CRICKET07_IOS_GAME
+    uint32_t image_base = verified.image_base;
+    uint32_t entry = verified.entry_rva;
+    uint32_t image_size = verified.image_size;
+    /* From here onward, commit is infallible under the documented
+       single-loader-thread invariant and successful dispatch preflight. */
+    memcpy(HP(image_base), staged_image, image_size);
+    free(staged_image);
+#else
     const uint8_t *pe = file + rd32(file + 0x3c);
     uint16_t nsec = rd16(pe + 6);
     uint16_t optsz = rd16(pe + 20);
@@ -401,6 +424,7 @@ int load_image(const char *path, LoadedImage *out) {
         memset(HP(image_base + va), 0, vsize);
         memcpy(HP(image_base + va), file + rawptr, n);
     }
+#endif
 
     /* Resolve iOS imports from the immutable plan, never from IAT data
        that may already have been overwritten by earlier resolutions. */
@@ -412,7 +436,7 @@ int load_image(const char *path, LoadedImage *out) {
         GuestFn fn = find_handler(s->name);
         s->fn = fn ? fn : unimplemented_import;
         uint32_t magic = IMPORT_BASE + g_nimports * 16;
-        W32(image_base + entry->iat_rva, magic);
+        /* The IAT was patched in staged_image before the guest commit. */
         register_function(magic, s->fn);
         g_nimports++;
     }
