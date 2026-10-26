@@ -50,6 +50,20 @@ int main(void) {
     /* The staged name is independent of subsequent changes to the source. */
     memset(file + 0x472, 'x', 11);
     assert(!strcmp(plan->entries[0].name, "KERNEL32.DLL!ExitProcess"));
+    /* OriginalFirstThunk == FirstThunk: both imports must be staged
+       before the loader overwrites any thunk in guest memory. */
+    fixture(file);
+    w32(file + 0x410, 0x2040);
+    w32(file + 0x444, 0x2080);
+    memcpy(file + 0x482, "GetTickCount", 13);
+    assert(cricket07_pe32_stage_imports(file, sizeof file, 0, plan));
+    assert(plan->count == 2);
+    assert(plan->entries[0].iat_rva == 0x2040);
+    assert(plan->entries[1].iat_rva == 0x2044);
+    assert(!strcmp(plan->entries[1].name, "KERNEL32.DLL!GetTickCount"));
+    memset(file + 0x440, 0xff, 8);
+    assert(!strcmp(plan->entries[0].name, "KERNEL32.DLL!ExitProcess"));
+    assert(!strcmp(plan->entries[1].name, "KERNEL32.DLL!GetTickCount"));
     fixture(file);
     w32(file + 0x440, 0x80000023u);
     assert(cricket07_pe32_stage_imports(file, sizeof file, 4095, plan));
