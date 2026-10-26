@@ -9,6 +9,14 @@ static void dummy(CPU *c) { (void)c; }
 
 int main(void) {
     assert(runtime_import_slots_remaining() == 4096u);
+    /* Reserve the entire possible PE import range without consuming slots. */
+    assert(runtime_prepare_import_registration(4096u));
+    assert(!runtime_prepare_import_registration(4097u));
+    assert(runtime_import_slots_remaining() == 4096u);
+    /* A generated function at a future import trampoline must fail preflight. */
+    register_function(IMPORT_BASE + 16u, dummy);
+    assert(!runtime_prepare_import_registration(2u));
+    assert(lookup_function(IMPORT_BASE + 16u) == dummy);
     assert(add_dynamic_import(NULL, dummy) == 0);
     assert(add_dynamic_import("", dummy) == 0);
     assert(add_dynamic_import("KERNEL32.DLL!Test", NULL) == 0);
@@ -37,6 +45,7 @@ int main(void) {
         assert(!strcmp(import_name(address), name));
     }
     assert(runtime_import_slots_remaining() == 0);
+    assert(!runtime_prepare_import_registration(1u));
     assert(add_dynamic_import("SYNTHETIC.DLL!Overflow", dummy) == 0);
     assert(runtime_import_slots_remaining() == 0);
     assert(import_name(IMPORT_BASE + 4096u * 16u) == NULL);
