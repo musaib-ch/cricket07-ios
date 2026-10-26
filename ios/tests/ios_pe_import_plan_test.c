@@ -74,6 +74,29 @@ int main(void) {
     w32(file + 0x40c, 0x2fffu);
     assert(!cricket07_pe32_stage_imports(file, sizeof file, 0, plan));
     assert(plan->count == 0);
+    /* The runtime import-slot name is 96 bytes including NUL.
+       A 95-character DLL!function name must fit exactly. */
+    fixture(file);
+    memset(file + 0x472, 'F', 82);
+    file[0x472 + 82] = 0;
+    assert(cricket07_pe32_stage_imports(file, sizeof file, 0, plan));
+    assert(plan->count == 1);
+    assert(strlen(plan->entries[0].name) == 95);
+
+    /* A one-byte overflow must fail without publishing a partial plan. */
+    fixture(file);
+    memset(file + 0x472, 'F', 83);
+    file[0x472 + 83] = 0;
+    assert(!cricket07_pe32_stage_imports(file, sizeof file, 0, plan));
+    assert(plan->count == 0);
+
+    /* A long DLL name must not silently alias another import handler. */
+    fixture(file);
+    memset(file + 0x460, 'D', 96);
+    file[0x460 + 96] = 0;
+    assert(!cricket07_pe32_stage_imports(file, sizeof file, 0, plan));
+    assert(plan->count == 0);
+
     assert(!cricket07_pe32_stage_imports(file, sizeof file, 0, NULL));
     free(plan);
     return 0;
