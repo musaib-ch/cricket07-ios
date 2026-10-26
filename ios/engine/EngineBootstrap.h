@@ -1,7 +1,7 @@
 #ifndef CRICKET07_ENGINE_BOOTSTRAP_H
 #define CRICKET07_ENGINE_BOOTSTRAP_H
 
-#include "../../runtime/cpu.h"
+#include "../../runtime/runtime.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,6 +25,17 @@ int cricket07_engine_host_prepared(void);
  * This does not load or execute the game. */
 int cricket07_engine_prepare_guest(void);
 CPU *cricket07_engine_guest_cpu(void); /* NULL until successful */
+
+/* Explicit, non-executing image-load seam for a user-owned PE32 file.
+ * Accepts only absolute iOS paths. Initializes the guest if necessary,
+ * then invokes the validated iOS loader once on the single startup thread.
+ * Failed loads leave *out unchanged and may be retried; a successful load
+ * blocks further image loads for this guest lifetime. No translated
+ * functions are registered or called by this wrapper. Never call from
+ * the SwiftUI or Metal rendering threads. Not a security sandbox.
+ */
+int cricket07_engine_load_user_executable(const char *absolute_path, LoadedImage *out);
+int cricket07_engine_image_loaded(void);
 
 #ifdef __cplusplus
 }

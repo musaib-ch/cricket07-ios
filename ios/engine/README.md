@@ -176,3 +176,19 @@ arbitrary executables. The private image can temporarily increase memory
 pressure, so a physical-device test is still required. Generated game
 functions, iOS startup/lifecycle, actual Metal frames and gameplay remain
 unconnected and unverified.
+
+## Controlled, non-executing engine image-load seam
+
+`cricket07_engine_load_user_executable()` now accepts an absolute path to a
+user-owned executable on the dedicated engine startup thread. It validates
+its arguments before initializing the guest, reuses the existing host/CPU
+bootstrap, calls the iOS-only staged PE loader, and preserves caller output
+metadata on load failure. The image-loaded guard prevents a second load in
+the same guest lifetime. Failures before publication can be retried. The
+bootstrap regression now tests invalid paths, guest-allocation failure,
+loader failure, retry and duplicate-load rejection without game assets.
+
+This is **not wired into the SwiftUI app**, does not register generated game
+functions or execute the entry point, and is not a security boundary for
+arbitrary executables. Device memory pressure, imports, Metal rendering,
+controller behavior during gameplay, and gameplay itself remain unverified.

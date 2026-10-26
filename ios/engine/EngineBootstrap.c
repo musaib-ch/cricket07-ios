@@ -33,3 +33,22 @@ int cricket07_engine_prepare_guest(void) {
 CPU *cricket07_engine_guest_cpu(void) {
     return g_guest_ready ? &g_guest_cpu : NULL;
 }
+
+/* One-shot image loading is deliberately separate from translated execution. */
+int cricket07_engine_image_loaded(void) {
+    return g_image_hi > g_image_lo;
+}
+
+int cricket07_engine_load_user_executable(const char *absolute_path, LoadedImage *out) {
+    /* Do not initialize the guest or open files for invalid paths/callers. */
+    if (!absolute_path || absolute_path[0] != '/' || !absolute_path[1] ||
+        !out || cricket07_engine_image_loaded()) return 0;
+    if (!cricket07_engine_prepare_guest()) return 0;
+
+    /* Preserve the caller's metadata even if a loader error modifies its
+       output parameter. The loader owns guest-memory publication. */
+    LoadedImage staged;
+    if (load_image(absolute_path, &staged) != 0) return 0;
+    *out = staged;
+    return 1;
+}
