@@ -10,6 +10,9 @@ on:
       - 'ios/engine/PEImportsPreflight.*'
       - 'ios/engine/PELoadGate.*'
       - 'ios/tests/ios_pe_image_stage_test.c'
+      - 'ios/tests/ios_pe_image_load_test.c'
+      - 'runtime/runtime.c'
+      - 'runtime/runtime.h'
       - '.github/workflows/ios-pe-image-stage.yml'
   pull_request:
   workflow_dispatch:
@@ -33,4 +36,14 @@ jobs:
             ios/engine/PEImageStage.c ios/tests/ios_pe_image_stage_test.c \
             -o "$RUNNER_TEMP/pe-image-stage-test"
           "$RUNNER_TEMP/pe-image-stage-test"
+          clang -std=gnu11 -O1 -g -Wall -Wextra -Wno-unused-function \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -ffunction-sections -fdata-sections -frounding-math \
+            -DCRICKET07_IOS_GAME -DRC_IOS_FRAME_TRANSPORT=1 \
+            runtime/runtime.c ios/engine/PEPreflight.c \
+            ios/engine/PEImportsPreflight.c ios/engine/PELoadGate.c \
+            ios/engine/PEImportPlan.c ios/engine/PEImageStage.c \
+            ios/tests/ios_pe_image_load_test.c \
+            -Wl,-dead_strip -o "$RUNNER_TEMP/pe-image-load-test"
+          "$RUNNER_TEMP/pe-image-load-test"
           echo 'Synthetic PE image staging and failure isolation passed ASan/UBSan; no game assets used.' >> "$GITHUB_STEP_SUMMARY"
