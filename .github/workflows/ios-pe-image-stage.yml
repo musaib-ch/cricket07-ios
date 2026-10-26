@@ -1,0 +1,36 @@
+name: Cricket 07 iOS PE image staging
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/PEImageStage.*'
+      - 'ios/engine/PEImportPlan.*'
+      - 'ios/engine/PEPreflight.*'
+      - 'ios/engine/PEImportsPreflight.*'
+      - 'ios/engine/PELoadGate.*'
+      - 'ios/tests/ios_pe_image_stage_test.c'
+      - '.github/workflows/ios-pe-image-stage.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-stage:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage synthetic PE image under ASan and UBSan
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/PEPreflight.c ios/engine/PEImportsPreflight.c \
+            ios/engine/PELoadGate.c ios/engine/PEImportPlan.c \
+            ios/engine/PEImageStage.c ios/tests/ios_pe_image_stage_test.c \
+            -o "$RUNNER_TEMP/pe-image-stage-test"
+          "$RUNNER_TEMP/pe-image-stage-test"
+          echo 'Synthetic PE image staging and failure isolation passed ASan/UBSan; no game assets used.' >> "$GITHUB_STEP_SUMMARY"
