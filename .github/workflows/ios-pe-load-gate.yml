@@ -1,0 +1,33 @@
+name: Cricket 07 iOS PE loader gate
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/PELoadGate.*'
+      - 'ios/engine/PEPreflight.*'
+      - 'ios/engine/PEImportsPreflight.*'
+      - 'ios/tests/ios_pe_load_gate_test.c'
+      - '.github/workflows/ios-pe-load-gate.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loader-gate:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test bounded import-slot gate with sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/PEPreflight.c ios/engine/PEImportsPreflight.c \
+            ios/engine/PELoadGate.c ios/tests/ios_pe_load_gate_test.c \
+            -o "$RUNNER_TEMP/pe-load-gate-test"
+          "$RUNNER_TEMP/pe-load-gate-test"
+          echo 'PE loader gate passed ASan/UBSan synthetic tests; no game assets used.' >> "$GITHUB_STEP_SUMMARY"
