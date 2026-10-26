@@ -9,6 +9,7 @@
 
 #ifdef CRICKET07_IOS_GAME
 #include "../ios/engine/PELoadGate.h"
+#include "../ios/engine/PEImportPlan.h"
 #endif
 
 uint8_t *g_mem;
@@ -315,8 +316,15 @@ int load_image(const char *path, LoadedImage *out) {
         free(file);
         return -1;
     }
-    /* The gate also constrains all section/image and import ranges.
-       It is not a substitute for a fully transactional loader. */
+    /* Stage import names and IAT destinations before guest writes.
+       Resolving from guest memory could overwrite later import metadata. */
+    Cricket07PEImportPlan *import_plan = malloc(sizeof *import_plan);
+    if (!import_plan ||
+        !cricket07_pe32_stage_imports(file, size, g_nimports, import_plan)) {
+        free(import_plan);
+        free(file);
+        return -1;
+    }
     (void)verified;
 #endif
     const uint8_t *pe = file + rd32(file + 0x3c);
@@ -339,8 +347,22 @@ int load_image(const char *path, LoadedImage *out) {
         memcpy(HP(image_base + va), file + rawptr, n);
     }
 
-    /* Resolve imports: each IAT slot gets a magic host-dispatch address.
-       The iOS gate validates the complete descriptor and thunk chains first. */
+    /* Resolve iOS imports from the immutable plan, never from IAT data
+       that may already have been overwritten by earlier resolutions. */
+#ifdef CRICKET07_IOS_GAME
+    for (uint32_t k = 0; k < import_plan->count; ++k) {
+        const Cricket07PEStagedImport *entry = &import_plan->entries[k];
+        ImportSlot *s = &g_imports[g_nimports];
+        memcpy(s->name, entry->name, sizeof s->name);
+        GuestFn fn = find_handler(s->name);
+        s->fn = fn ? fn : unimplemented_import;
+        uint32_t magic = IMPORT_BASE + g_nimports * 16;
+        W32(image_base + entry->iat_rva, magic);
+        register_function(magic, s->fn);
+        g_nimports++;
+    }
+    free(import_plan);
+#else
     for (uint32_t d = image_base + imp_rva; R32(d + 12); d += 20) {
         const char *dll = (const char *)HP(image_base + R32(d + 12));
         uint32_t ilt = R32(d) ? R32(d) : R32(d + 16), iat = R32(d + 16);
@@ -368,6 +390,7 @@ int load_image(const char *path, LoadedImage *out) {
             g_nimports++;
         }
     }
+#endif
     free(file);
     out->image_base = image_base;
     g_image_lo = image_base;
