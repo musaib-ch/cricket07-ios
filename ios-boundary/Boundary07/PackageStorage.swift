@@ -20,10 +20,11 @@ final class PackageStorage {
     let root: URL
     private let fm = FileManager.default
     init(root: URL? = nil) throws {
+        let manager = FileManager.default
         if let root = root { self.root = root }
-        else { self.root = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
+        else { self.root = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                      appropriateFor: nil, create: true).appendingPathComponent("Boundary07", isDirectory: true) }
-        try fm.createDirectory(at: self.root, withIntermediateDirectories: true)
+        try manager.createDirectory(at: self.root, withIntermediateDirectories: true)
     }
     var current: URL? {
         guard let name = try? String(contentsOf: root.appendingPathComponent("current.txt"), encoding: .utf8), UUID(uuidString: name) != nil else { return nil }

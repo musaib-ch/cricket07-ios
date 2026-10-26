@@ -121,6 +121,8 @@ struct PavilionView: View {
             }.background(Color(red: 0.06, green: 0.08, blue: 0.06))
         }
         .fileImporter(isPresented: $model.pickingFolder, allowedContentTypes: [.folder], allowsMultipleSelection: false, onCompletion: model.importSelected)
+        .onChange(of: model.busy) { _, busy in UIApplication.shared.isIdleTimerDisabled = busy || model.showingWeb }
+        .onChange(of: model.showingWeb) { _, showing in UIApplication.shared.isIdleTimerDisabled = showing || model.busy }
         .fullScreenCover(isPresented: $model.showingWeb, onDismiss: { model.running = false; model.webView = nil; UIApplication.shared.isIdleTimerDisabled = false }) {
             GameScreen(model: model)
         }

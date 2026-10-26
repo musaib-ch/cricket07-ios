@@ -15,9 +15,9 @@ targets:
     sources:
       - path: Boundary07
         excludes: [Resources]
-    resources:
       - path: Boundary07/Resources/Web
         type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.boundary07.local
