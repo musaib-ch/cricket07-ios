@@ -5,9 +5,11 @@ on:
     branches: [feature/ios-native-foundation]
     paths:
       - 'ios/engine/PELoadGate.*'
+      - 'ios/engine/PEImportPlan.*'
       - 'ios/engine/PEPreflight.*'
       - 'ios/engine/PEImportsPreflight.*'
       - 'ios/tests/ios_pe_load_gate_test.c'
+      - 'ios/tests/ios_pe_import_plan_test.c'
       - '.github/workflows/ios-pe-load-gate.yml'
   pull_request:
   workflow_dispatch:
@@ -30,4 +32,11 @@ jobs:
             ios/engine/PELoadGate.c ios/tests/ios_pe_load_gate_test.c \
             -o "$RUNNER_TEMP/pe-load-gate-test"
           "$RUNNER_TEMP/pe-load-gate-test"
-          echo 'PE loader gate passed ASan/UBSan synthetic tests; no game assets used.' >> "$GITHUB_STEP_SUMMARY"
+          clang -std=c11 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/PEPreflight.c ios/engine/PEImportsPreflight.c \
+            ios/engine/PELoadGate.c ios/engine/PEImportPlan.c \
+            ios/tests/ios_pe_import_plan_test.c \
+            -o "$RUNNER_TEMP/pe-import-plan-test"
+          "$RUNNER_TEMP/pe-import-plan-test"
+          echo 'PE gate and staged import plan passed ASan/UBSan synthetic tests; no game assets used.' >> "$GITHUB_STEP_SUMMARY"
