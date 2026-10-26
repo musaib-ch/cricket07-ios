@@ -153,3 +153,26 @@ including the 4096-slot boundary, under ASan/UBSan using synthetic names.
 This does not establish full transactional rollback for executable loading
 or for an unexpected mid-vtable allocation failure. Game startup, Metal
 compatibility, and physical-device gameplay are still unverified.
+
+## Private PE image staging (synthetic CI only)
+
+The iOS-only `load_image()` now validates PE metadata, stages import names,
+checks dispatch capacity, and builds a fully patched, zero-initialized PE image
+in private heap memory before copying it into guest memory. Failed allocation
+or validation leaves guest image bytes, import slots and the output image
+metadata unchanged. Duplicate or partially overlapping IAT patch addresses
+are rejected, and loading a second executable into a live guest is refused.
+The desktop loader is unchanged.
+
+`ios-pe-image-stage.yml` runs synthetic image/section/IAT and failure-path
+tests under ASan/UBSan. Both iPhone and Simulator engine archives compile
+`PEImageStage.c` and verify the runtime references it. No game files are
+distributed.
+
+**Scope:** The final commit assumes a single engine loader thread, with no
+concurrent dynamic import registration between preflight and publication.
+It is not a general-purpose multithreaded transaction or a sandbox for
+arbitrary executables. The private image can temporarily increase memory
+pressure, so a physical-device test is still required. Generated game
+functions, iOS startup/lifecycle, actual Metal frames and gameplay remain
+unconnected and unverified.
