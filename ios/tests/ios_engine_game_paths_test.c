@@ -28,6 +28,10 @@ int main(void) {
     FILE *f = fopen(file, "wb");
     assert(f && fclose(f) == 0);
     assert(symlink(game, alias) == 0);
+    /* On macOS /tmp is a symlink to /private/tmp. Compare canonical roots. */
+    char *canonical_game = realpath(game, NULL);
+    char *canonical_user = realpath(user, NULL);
+    assert(canonical_game && canonical_user);
 
     assert(!cricket07_engine_game_paths_configured());
     assert(!cricket07_engine_configure_game_paths(NULL, user));
@@ -43,21 +47,23 @@ int main(void) {
      * a mutable symlink spelling in the host's filesystem globals. */
     assert(cricket07_engine_configure_game_paths(alias, user));
     assert(cricket07_engine_game_paths_configured());
-    assert(strcmp(g_game_root, game) == 0);
-    assert(strcmp(g_user_root, user) == 0);
+    assert(strcmp(g_game_root, canonical_game) == 0);
+    assert(strcmp(g_user_root, canonical_user) == 0);
     assert(cricket07_engine_configure_game_paths(game, user));
     assert(!cricket07_engine_configure_game_paths(user, game));
     assert(!cricket07_engine_configure_game_paths(game, missing));
-    assert(strcmp(g_game_root, game) == 0);
-    assert(strcmp(g_user_root, user) == 0);
+    assert(strcmp(g_game_root, canonical_game) == 0);
+    assert(strcmp(g_user_root, canonical_user) == 0);
 
     g_image_lo = 0x400000u;
     g_image_hi = 0x404000u;
     assert(!cricket07_engine_configure_game_paths(game, user));
-    assert(strcmp(g_game_root, game) == 0);
-    assert(strcmp(g_user_root, user) == 0);
+    assert(strcmp(g_game_root, canonical_game) == 0);
+    assert(strcmp(g_user_root, canonical_user) == 0);
     assert(unlink(alias) == 0 && unlink(file) == 0);
     assert(rmdir(nested) == 0 && rmdir(game) == 0);
     assert(rmdir(user) == 0 && rmdir(root) == 0);
+    free(canonical_game);
+    free(canonical_user);
     return 0;
 }
