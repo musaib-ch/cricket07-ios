@@ -1,0 +1,30 @@
+name: Cricket 07 iOS startup staging preflight
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/EngineStartup.*'
+      - 'ios/tests/ios_engine_startup_test.c'
+      - '.github/workflows/ios-engine-startup.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  startup-preflight:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate synthetic user-game startup staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=gnu11 -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/EngineStartup.c \
+            ios/tests/ios_engine_startup_test.c \
+            -o "$RUNNER_TEMP/startup-stage-test"
+          "$RUNNER_TEMP/startup-stage-test"
