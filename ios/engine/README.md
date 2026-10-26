@@ -91,3 +91,29 @@ loader is still unchecked, does not call these validators, and can
 abort or corrupt guest memory on malformed data. Its import writes may
 alias other image structures, and loader-side bounds, error recovery,
 and a controlled startup call remain required. No gameplay claim.
+
+## iOS PE load gate wired into runtime (still not a playable loader)
+
+The iOS engine now compiles `PELoadGate.c` and invokes
+`cricket07_pe32_load_gate()` from `runtime/runtime.c:load_image()`
+**before any guest image writes**. It combines the existing PE32 and
+import-table preflights and rejects an import count exceeding the remaining
+slots in the fixed 4096-entry dispatch table. This gate is compiled only
+for `CRICKET07_IOS_GAME`, leaving desktop loading behavior otherwise
+unchanged. File reading is capped at 128 MiB, failures clean up allocations,
+and image-size metadata is captured before the file buffer is freed
+(fixing a prior use-after-free). Import insertion also refuses to index
+beyond the fixed slot table.
+
+`ios-pe-load-gate.yml` tests the gate with synthetic PE fixtures under
+ASan/UBSan, including a full import table and malformed image/import
+metadata. The engine archive workflow verifies that the iOS runtime
+references the gate and the archive defines it.
+
+**Not yet safe to expose as an arbitrary-file import UI.** Import
+resolution is not transactional, so overlapping IAT and import-name
+metadata can still corrupt later resolution. The runtime must stage
+validated import names and IAT writes before mutation, add recovery from
+partial loading, and test guest image loading with synthetic executables.
+The SwiftUI shell does not call the loader or execute game code. Game
+assets are never included in CI.
