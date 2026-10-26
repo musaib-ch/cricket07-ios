@@ -117,3 +117,23 @@ validated import names and IAT writes before mutation, add recovery from
 partial loading, and test guest image loading with synthetic executables.
 The SwiftUI shell does not call the loader or execute game code. Game
 assets are never included in CI.
+
+
+## iOS immutable import staging
+
+The iOS loader now builds a bounded `Cricket07PEImportPlan` from validated,
+immutable PE file bytes before it writes the image to guest memory. The plan
+captures each import's resolved `DLL!function` name (or ordinal) and IAT
+destination RVA. This avoids reading names or thunk metadata from guest memory
+after earlier IAT writes might have overwritten them, including PE files where
+`OriginalFirstThunk == FirstThunk`. The desktop loader is unchanged.
+
+`ios_pe_import_plan_test.c` exercises normal imports, ordinal imports,
+IAT/ILT aliasing, exhausted slot capacity, and malformed import metadata
+using synthetic images under ASan/UBSan. The engine-library workflow compiles
+the plan and verifies the iOS runtime references it.
+
+**Remaining safety work:** This is staged *metadata*, not an atomic image
+transaction. Guest-memory section writes, import registrations, and IAT writes
+still need rollback/retry guarantees, and runtime dynamic import registration
+must be bounded. Do not expose arbitrary-file loading or claim gameplay.
