@@ -46,6 +46,17 @@ int cricket07_engine_image_loaded(void);
  */
 int cricket07_engine_resolve_loaded_entrypoint(GuestFn *out_fn, uint32_t *out_address);
 
+/* One-shot handoff for a separately linked generated register_all_functions()
+ * callback. Call after loading a user-owned PE on the single engine thread.
+ * The callback must only populate the translated function registry. It is
+ * invoked at most once, even if it fails to register the image entry point,
+ * because the runtime registry cannot roll back partial registrations.
+ * Success verifies only the entry point, not complete game coverage.
+ * This API does not call the translated entry point or start gameplay.
+ */
+int cricket07_engine_install_translated_functions(void (*registrar)(void));
+int cricket07_engine_translated_functions_installed(void);
+
 #ifdef __cplusplus
 }
 #endif

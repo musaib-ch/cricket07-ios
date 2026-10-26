@@ -8,6 +8,14 @@ static int calls[8], count;
 static int imports_ok = 1, recorder_ok = 1, memory_ok = 1;
 static int loader_ok = 1, loader_calls;
 static int translated_entry_ready;
+static int registry_calls;
+static int registry_register_entry = 1;
+static void register_synthetic_functions(void) {
+    ++registry_calls;
+    /* Recursive registration must fail without calling the callback again. */
+    assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
+    if (registry_register_entry) translated_entry_ready = 1;
+}
 static void synthetic_translated_entry(CPU *cpu) { cpu->eax = 0xC0707u; }
 static void sentinel_entry(CPU *cpu) { (void)cpu; }
 GuestFn lookup_function(uint32_t addr) {
@@ -53,6 +61,10 @@ int runtime_try_init(CPU *c) {
 int main(void) {
     LoadedImage image = {0x11111111u, 0x22222222u, 0x33333333u};
     assert(!cricket07_engine_image_loaded());
+    assert(!cricket07_engine_translated_functions_installed());
+    assert(!cricket07_engine_install_translated_functions(NULL));
+    assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
+    assert(registry_calls == 0);
     GuestFn resolved = sentinel_entry;
     uint32_t entry_address = 0xfeedbeefu;
     assert(!cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
@@ -137,5 +149,24 @@ int main(void) {
     assert(!cricket07_engine_load_user_executable("/tmp/cricket07-synthetic.exe", &image));
     assert(loader_calls == 2); /* never reload over an active image */
     assert(count == ready_count); /* loader must not reset host or guest */
+    /* Invalid image bounds must not consume the one-shot registration. */
+    g_image_hi = 0x00400080u;
+    assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
+    assert(registry_calls == 0);
+    g_image_hi = 0x00404000u;
+#if defined(TEST_REGISTRY_FAILURE)
+    registry_register_entry = 0;
+    assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
+    assert(registry_calls == 1 && !cricket07_engine_translated_functions_installed());
+    assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
+    assert(registry_calls == 1); /* never retry a partially mutated registry */
+#else
+    assert(cricket07_engine_install_translated_functions(register_synthetic_functions));
+    assert(registry_calls == 1 && cricket07_engine_translated_functions_installed());
+    assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
+    assert(registry_calls == 1); /* no duplicate generated registration */
+    assert(cricket07_engine_resolve_loaded_entrypoint(&resolved, &entry_address));
+    assert(resolved == synthetic_translated_entry && entry_address == 0x00401000u);
+#endif
     return 0;
 }

@@ -208,3 +208,23 @@ successful synthetic resolution; both iOS engine archives check the symbol.
 iOS archive or diagnostic IPA. This gate deliberately cannot create them,
 start gameplay, validate their completeness, or prove Metal/DirectInput
 compatibility. Use only on the dedicated engine thread, not from SwiftUI.
+
+## One-shot generated-function registration handoff
+
+`cricket07_engine_install_translated_functions(registrar)` now provides an
+explicit handoff for a separately linked `register_all_functions` generated
+callback after a user-owned executable has been loaded. It validates the
+published image bounds before calling the callback and verifies that the
+entrypoint resolves afterward. It never executes the translated entrypoint.
+Reentrant calls and repeated registration are rejected. A callback that
+fails to register the entrypoint consumes its single attempt because the
+runtime function table cannot roll back partially registered functions.
+`cricket07_engine_translated_functions_installed()` means only that the
+entrypoint was found after registration, **not** that all translated game
+functions exist or gameplay can run. The native engine archives expose the
+handoff, but no generated game code is linked into the diagnostic IPA.
+
+The bootstrap regression uses synthetic registration callbacks to cover
+missing images, invalid metadata, recursive calls, successful registration,
+and fail-closed retry behavior. Actual engine startup, Metal gameplay,
+controller input during gameplay and device testing remain outstanding.

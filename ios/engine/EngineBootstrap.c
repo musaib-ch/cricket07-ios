@@ -73,3 +73,33 @@ int cricket07_engine_resolve_loaded_entrypoint(GuestFn *out_fn, uint32_t *out_ad
     return 1;
 }
 
+
+/* A generated registry may register many functions before discovering a
+ * missing entry point. Treat its callback as a one-shot mutation, never a
+ * retryable operation. No translated game function is executed here. */
+static int g_registry_install_attempted;
+static int g_registry_entry_verified;
+
+int cricket07_engine_install_translated_functions(void (*registrar)(void)) {
+    if (!registrar || g_registry_install_attempted || !g_guest_ready ||
+        !g_loaded_image_valid || !cricket07_engine_image_loaded()) return 0;
+    /* Reject inconsistent image metadata before invoking user-supplied code. */
+    if (g_loaded_image.image_base != g_image_lo ||
+        g_loaded_image.entry < g_image_lo ||
+        g_loaded_image.entry >= g_image_hi) return 0;
+
+    /* Set before invocation to reject reentrant registration. If the callback
+     * fails to register an entry, partial registrations are retained and a
+     * second attempt is forbidden for the lifetime of this guest. */
+    g_registry_install_attempted = 1;
+    registrar();
+    GuestFn entry = NULL;
+    uint32_t address = 0;
+    if (!cricket07_engine_resolve_loaded_entrypoint(&entry, &address)) return 0;
+    g_registry_entry_verified = 1;
+    return 1;
+}
+
+int cricket07_engine_translated_functions_installed(void) {
+    return g_registry_entry_verified;
+}
