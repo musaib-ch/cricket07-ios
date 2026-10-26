@@ -13,6 +13,7 @@ on:
       - 'ios/engine/EngineBootstrap.*'
       - 'ios/engine/PEPreflight.*'
       - 'ios/engine/PEImportsPreflight.*'
+      - 'ios/engine/PELoadGate.*'
       - '.github/workflows/ios-engine-library.yml'
   workflow_dispatch:
 
@@ -55,6 +56,7 @@ jobs:
             ios/engine/EngineBootstrap.c
             ios/engine/PEPreflight.c
             ios/engine/PEImportsPreflight.c
+            ios/engine/PELoadGate.c
           )
           for src in "${SOURCES[@]}"; do
             object="$OUT/objects/${src//\//_}.o"
@@ -101,6 +103,8 @@ jobs:
           grep -Fq '_cricket07_engine_guest_cpu' "$OUT/bootstrap-symbols.txt"
           xcrun nm -g "$OUT/objects/ios_engine_PEPreflight.c.o" | grep -Fq '_cricket07_pe32_preflight'
           xcrun nm -g "$OUT/objects/ios_engine_PEImportsPreflight.c.o" | grep -Fq '_cricket07_pe32_imports_preflight'
+          xcrun nm -g "$OUT/objects/ios_engine_PELoadGate.c.o" | grep -Fq '_cricket07_pe32_load_gate'
+          xcrun nm -u "$OUT/objects/runtime_runtime.c.o" | grep -Fq '_cricket07_pe32_load_gate'
           xcrun nm -g "$OUT/objects/runtime_runtime.c.o" > "$OUT/runtime-symbols.txt"
           grep -Fq '_runtime_try_init' "$OUT/runtime-symbols.txt"
           grep -Fq '_g_render' "$OUT/d3d-backend-symbols.txt"
