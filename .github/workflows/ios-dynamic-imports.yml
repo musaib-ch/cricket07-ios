@@ -1,0 +1,34 @@
+name: Cricket 07 iOS dynamic import bounds
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'runtime/runtime.c'
+      - 'runtime/runtime.h'
+      - 'host/com.c'
+      - 'ios/tests/ios_dynamic_import_bounds_test.c'
+      - '.github/workflows/ios-dynamic-imports.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import-bounds:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise runtime import slots under ASan and UBSan
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=gnu11 -O1 -g -Wall -Wextra -Wno-unused-function \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -ffunction-sections -fdata-sections -frounding-math \
+            -DCRICKET07_IOS_GAME -DRC_IOS_FRAME_TRANSPORT=1 \
+            runtime/runtime.c ios/tests/ios_dynamic_import_bounds_test.c \
+            -Wl,-dead_strip -o "$RUNNER_TEMP/dynamic-import-bounds-test"
+          "$RUNNER_TEMP/dynamic-import-bounds-test"
+          echo 'Runtime import-slot boundaries passed ASan/UBSan; synthetic names only.' >> "$GITHUB_STEP_SUMMARY"

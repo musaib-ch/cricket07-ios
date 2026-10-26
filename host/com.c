@@ -32,12 +32,24 @@ static void com_dispatch(CPU *c) {
 }
 
 static uint32_t build_vtable(ComInterface *it) {
+    if (!it) return 0;
     if (it->vtable) return it->vtable;
+    /* Validate every method before reserving slots. A failed dynamic import
+       returns zero, which must never be converted to a g_slots[] index. */
+    if (!it->name || !it->methods || it->count <= 0 ||
+        (uint32_t)it->count > runtime_import_slots_remaining()) return 0;
+    for (int i = 0; i < it->count; ++i) {
+        if (!it->methods[i].name) return 0;
+        char name[128];
+        int n = snprintf(name, sizeof name, "%s::%s", it->name, it->methods[i].name);
+        if (n <= 0 || n >= 96) return 0;
+    }
     uint32_t vt = heap_alloc(4u * (uint32_t)it->count, 1);
     for (int i = 0; i < it->count; i++) {
         char name[128];
         snprintf(name, sizeof name, "%s::%s", it->name, it->methods[i].name);
         uint32_t magic = add_dynamic_import(name, com_dispatch);
+        if (!magic) return 0; /* no out-of-bounds slot write on failure */
         uint32_t slot = (magic - IMPORT_BASE) / 16;
         g_slots[slot].it = it;
         g_slots[slot].idx = i;
@@ -50,6 +62,7 @@ static uint32_t build_vtable(ComInterface *it) {
 uint32_t com_new(ComInterface *it, int type, void *data) {
     pthread_mutex_lock(&g_com_lock);
     uint32_t vt = build_vtable(it);
+    if (!vt) { pthread_mutex_unlock(&g_com_lock); return 0; }
     int idx = g_nfree ? g_free_idx[--g_nfree] : g_nobjs++;
     if (idx >= MAX_OBJS) { fprintf(stderr, "too many live COM objects\n"); abort(); }
     uint32_t g = heap_alloc(16, 1);

@@ -45,7 +45,10 @@ void set_import_handlers(ImportHandler *h, uint32_t n);  /* call before load_ima
 int load_image(const char *path, LoadedImage *out);
 GuestFn lookup_function(uint32_t addr);
 const char *import_name(uint32_t addr);
-uint32_t add_dynamic_import(const char *name, GuestFn fn);   /* for GetProcAddress */
+/* Zero on full table, invalid/overlong name, NULL callback or dispatch failure.
+ * Shared by GetProcAddress and COM vtable registration. */
+uint32_t add_dynamic_import(const char *name, GuestFn fn);
+uint32_t runtime_import_slots_remaining(void);
 GuestFn find_import_handler(const char *name);
 extern __thread uint32_t g_import_target;  /* address of the host slot being called (set by call_indirect) */
 uint32_t guest_alloc(uint32_t size);

@@ -21,20 +21,27 @@ static FnEntry *g_fns;
 static uint32_t g_fn_cap;  /* power of two */
 
 void register_function(uint32_t addr, GuestFn fn) {
+    if (!fn) return;
     if (!g_fns) {
         g_fn_cap = 1u << 16;
         g_fns = calloc(g_fn_cap, sizeof *g_fns);
+        if (!g_fns) return;
     }
     uint32_t i = (addr * 2654435761u) & (g_fn_cap - 1);
-    while (g_fns[i].fn && g_fns[i].addr != addr) i = (i + 1) & (g_fn_cap - 1);
-    g_fns[i].addr = addr;
-    g_fns[i].fn = fn;
+    for (uint32_t probe = 0; probe < g_fn_cap; ++probe) {
+        if (!g_fns[i].fn || g_fns[i].addr == addr) {
+            g_fns[i].addr = addr;
+            g_fns[i].fn = fn;
+            return;
+        }
+        i = (i + 1) & (g_fn_cap - 1);
+    }
 }
 
 GuestFn lookup_function(uint32_t addr) {
     if (!g_fns) return NULL;
     uint32_t i = (addr * 2654435761u) & (g_fn_cap - 1);
-    while (g_fns[i].fn) {
+    for (uint32_t probe = 0; probe < g_fn_cap && g_fns[i].fn; ++probe) {
         if (g_fns[i].addr == addr) return g_fns[i].fn;
         i = (i + 1) & (g_fn_cap - 1);
     }
@@ -244,8 +251,10 @@ void rdtsc(CPU *c) {
 
 /* ------------------------------------------------------------------ imports */
 
-typedef struct { char name[96]; GuestFn fn; } ImportSlot;
-static ImportSlot g_imports[4096];  /* PE imports + GetProcAddress results + COM method slots */
+#define RC_IMPORT_SLOT_LIMIT 4096u
+#define RC_IMPORT_NAME_BYTES 96u
+typedef struct { char name[RC_IMPORT_NAME_BYTES]; GuestFn fn; } ImportSlot;
+static ImportSlot g_imports[RC_IMPORT_SLOT_LIMIT];  /* PE, GetProcAddress and COM */
 static uint32_t g_nimports;
 
 static void unimplemented_import(CPU *c) {
@@ -265,13 +274,24 @@ static GuestFn find_handler(const char *name) {
     return NULL;
 }
 
+uint32_t runtime_import_slots_remaining(void) {
+    return g_nimports < RC_IMPORT_SLOT_LIMIT ? RC_IMPORT_SLOT_LIMIT - g_nimports : 0;
+}
+
 uint32_t add_dynamic_import(const char *name, GuestFn fn) {
-    ImportSlot *sl = &g_imports[g_nimports];
-    snprintf(sl->name, sizeof sl->name, "%s", name);
-    sl->fn = fn;
-    uint32_t magic = IMPORT_BASE + g_nimports * 16;
+    /* Fail without consuming a slot, publishing a truncated symbol, or
+       producing an invalid COM/GetProcAddress dispatch address. */
+    if (!name || !fn || !runtime_import_slots_remaining()) return 0;
+    size_t len = 0;
+    while (len < RC_IMPORT_NAME_BYTES && name[len]) ++len;
+    if (!len || len == RC_IMPORT_NAME_BYTES) return 0;
+    uint32_t magic = IMPORT_BASE + g_nimports * 16u;
     register_function(magic, fn);
-    g_nimports++;
+    if (lookup_function(magic) != fn) return 0; /* function-table allocation failed */
+    ImportSlot *sl = &g_imports[g_nimports];
+    memcpy(sl->name, name, len + 1);
+    sl->fn = fn;
+    ++g_nimports;
     return magic;
 }
 

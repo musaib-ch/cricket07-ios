@@ -137,3 +137,19 @@ the plan and verifies the iOS runtime references it.
 transaction. Guest-memory section writes, import registrations, and IAT writes
 still need rollback/retry guarantees, and runtime dynamic import registration
 must be bounded. Do not expose arbitrary-file loading or claim gameplay.
+
+## Bounded dynamic imports and COM slot safety
+
+`add_dynamic_import()` now rejects NULL/empty/overlong names, NULL callbacks,
+and exhausted import slots without consuming a slot or returning a forged
+dispatch address. The function table now tolerates allocation failure and
+bounds hash probing. `runtime_import_slots_remaining()` allows COM vtables to
+check capacity and method-name lengths before registering any methods.
+`build_vtable()` and `com_new()` reject failures instead of treating the
+zero failure sentinel as an import-table index.
+
+`ios-dynamic-imports.yml` exercises the real runtime registration API,
+including the 4096-slot boundary, under ASan/UBSan using synthetic names.
+This does not establish full transactional rollback for executable loading
+or for an unexpected mid-vtable allocation failure. Game startup, Metal
+compatibility, and physical-device gameplay are still unverified.
