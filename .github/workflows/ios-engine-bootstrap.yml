@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for mode in TEST_VALID TEST_IMPORT_FAILURE TEST_RECORDER_FAILURE TEST_MEMORY_FAILURE TEST_REGISTRY_FAILURE; do
+          for mode in TEST_VALID TEST_IMPORT_FAILURE TEST_RECORDER_FAILURE TEST_MEMORY_FAILURE TEST_REGISTRY_FAILURE TEST_LINKED_REGISTRY; do
             clang -std=gnu11 -Wall -Wextra -Werror "-D$mode" \
               -Iios/engine -Ihost \
               ios/engine/EngineBootstrap.c \

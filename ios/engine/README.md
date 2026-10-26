@@ -228,3 +228,23 @@ The bootstrap regression uses synthetic registration callbacks to cover
 missing images, invalid metadata, recursive calls, successful registration,
 and fail-closed retry behavior. Actual engine startup, Metal gameplay,
 controller input during gameplay and device testing remain outstanding.
+
+## Optional generated registry linkage probe (no game assets)
+
+The engine bootstrap now exports
+`cricket07_engine_linked_translated_functions_available()` and
+`cricket07_engine_install_linked_translated_functions()`. The former
+checks whether a generated `register_all_functions()` implementation is
+actually linked; the latter delegates to the existing one-shot registry
+handoff only when that symbol exists. Missing game-derived code returns
+failure without consuming the registration attempt or executing game code.
+The macOS bootstrap regression tests both a missing weak symbol and a
+synthetic linked registrar. Both iPhone and Simulator engine archives check
+for the exported APIs.
+
+**Important:** Weak references do not cause static linkers to extract
+otherwise unused generated objects from an archive. A future app integration
+must explicitly include its user-generated translation objects. The current
+SwiftUI diagnostic app does not link those objects, load the executable,
+or start gameplay. This probe does not validate translated function coverage,
+rendering, or device behavior.

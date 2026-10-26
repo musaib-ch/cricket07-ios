@@ -16,6 +16,9 @@ static void register_synthetic_functions(void) {
     assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
     if (registry_register_entry) translated_entry_ready = 1;
 }
+#if defined(TEST_LINKED_REGISTRY)
+void register_all_functions(void) { register_synthetic_functions(); }
+#endif
 static void synthetic_translated_entry(CPU *cpu) { cpu->eax = 0xC0707u; }
 static void sentinel_entry(CPU *cpu) { (void)cpu; }
 GuestFn lookup_function(uint32_t addr) {
@@ -62,6 +65,12 @@ int main(void) {
     LoadedImage image = {0x11111111u, 0x22222222u, 0x33333333u};
     assert(!cricket07_engine_image_loaded());
     assert(!cricket07_engine_translated_functions_installed());
+#if defined(TEST_LINKED_REGISTRY)
+    assert(cricket07_engine_linked_translated_functions_available());
+#else
+    assert(!cricket07_engine_linked_translated_functions_available());
+#endif
+    assert(!cricket07_engine_install_linked_translated_functions());
     assert(!cricket07_engine_install_translated_functions(NULL));
     assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
     assert(registry_calls == 0);
@@ -154,13 +163,20 @@ int main(void) {
     assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
     assert(registry_calls == 0);
     g_image_hi = 0x00404000u;
-#if defined(TEST_REGISTRY_FAILURE)
+#if defined(TEST_LINKED_REGISTRY)
+    assert(cricket07_engine_install_linked_translated_functions());
+    assert(registry_calls == 1 && cricket07_engine_translated_functions_installed());
+    assert(!cricket07_engine_install_linked_translated_functions());
+    assert(registry_calls == 1);
+#elif defined(TEST_REGISTRY_FAILURE)
     registry_register_entry = 0;
     assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
     assert(registry_calls == 1 && !cricket07_engine_translated_functions_installed());
     assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));
     assert(registry_calls == 1); /* never retry a partially mutated registry */
 #else
+    /* A missing weak-linked symbol must not consume the direct registration. */
+    assert(!cricket07_engine_install_linked_translated_functions());
     assert(cricket07_engine_install_translated_functions(register_synthetic_functions));
     assert(registry_calls == 1 && cricket07_engine_translated_functions_installed());
     assert(!cricket07_engine_install_translated_functions(register_synthetic_functions));

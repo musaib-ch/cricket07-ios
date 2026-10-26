@@ -103,3 +103,25 @@ int cricket07_engine_install_translated_functions(void (*registrar)(void)) {
 int cricket07_engine_translated_functions_installed(void) {
     return g_registry_entry_verified;
 }
+
+/* The generated registry is intentionally absent from this public source tree.
+ * A weak reference allows the engine archive to link without game-derived
+ * objects. A final application must explicitly link the generated object;
+ * the weak reference alone will not pull it out of a static archive.
+ */
+#if defined(__APPLE__)
+extern void register_all_functions(void) __attribute__((weak_import));
+#elif defined(__GNUC__) || defined(__clang__)
+extern void register_all_functions(void) __attribute__((weak));
+#else
+#error "Linked translated registry probe requires weak symbol support"
+#endif
+
+int cricket07_engine_linked_translated_functions_available(void) {
+    return register_all_functions != NULL;
+}
+
+int cricket07_engine_install_linked_translated_functions(void) {
+    if (!cricket07_engine_linked_translated_functions_available()) return 0;
+    return cricket07_engine_install_translated_functions(register_all_functions);
+}
