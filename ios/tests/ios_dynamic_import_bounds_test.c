@@ -6,8 +6,22 @@
 #include "../../runtime/runtime.h"
 
 static void dummy(CPU *c) { (void)c; }
+static void existing(CPU *c) { (void)c; }
 
-int main(void) {
+int main(int argc, char **argv) {
+    (void)argv;
+    if (argc > 1) {
+        /* A generated function at the next import address must never be
+           replaced, even if registration would otherwise appear successful. */
+        register_function(IMPORT_BASE, existing);
+        assert(lookup_function(IMPORT_BASE) == existing);
+        assert(add_dynamic_import("SYNTHETIC.DLL!Conflict", dummy) == 0);
+        assert(lookup_function(IMPORT_BASE) == existing);
+        assert(runtime_import_slots_remaining() == 4096u);
+        assert(import_name(IMPORT_BASE) == NULL);
+        assert(!runtime_prepare_import_registration(1u));
+        return 0;
+    }
     assert(runtime_import_slots_remaining() == 4096u);
     /* Reserve the entire possible PE import range without consuming slots. */
     assert(runtime_prepare_import_registration(4096u));

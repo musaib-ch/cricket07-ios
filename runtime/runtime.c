@@ -309,6 +309,10 @@ uint32_t add_dynamic_import(const char *name, GuestFn fn) {
     while (len < RC_IMPORT_NAME_BYTES && name[len]) ++len;
     if (!len || len == RC_IMPORT_NAME_BYTES) return 0;
     uint32_t magic = IMPORT_BASE + g_nimports * 16u;
+    /* Never replace a generated function or a pre-existing dispatch entry.
+       register_function() deliberately supports replacement for other callers,
+       so dynamic imports must reject address collisions themselves. */
+    if (lookup_function(magic)) return 0;
     register_function(magic, fn);
     if (lookup_function(magic) != fn) return 0; /* function-table allocation failed */
     ImportSlot *sl = &g_imports[g_nimports];

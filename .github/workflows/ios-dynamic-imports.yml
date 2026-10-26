@@ -31,4 +31,5 @@ jobs:
             runtime/runtime.c ios/tests/ios_dynamic_import_bounds_test.c \
             -Wl,-dead_strip -o "$RUNNER_TEMP/dynamic-import-bounds-test"
           "$RUNNER_TEMP/dynamic-import-bounds-test"
-          echo 'Runtime import-slot boundaries passed ASan/UBSan; synthetic names only.' >> "$GITHUB_STEP_SUMMARY"
+          "$RUNNER_TEMP/dynamic-import-bounds-test" collision
+          echo 'Runtime import-slot boundaries and collision rejection passed ASan/UBSan; synthetic names only.' >> "$GITHUB_STEP_SUMMARY"
