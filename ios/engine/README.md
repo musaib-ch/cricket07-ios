@@ -54,3 +54,23 @@ the guest is ready, and successful preparation is idempotent. All calls must
 remain on the single future engine startup thread. This is a prerequisite for
 loading the user's executable, not a game launch. On iPhone, successful virtual
 reservation and actual memory pressure must still be verified on device.
+
+## Bounded PE32 preflight (validation only)
+
+`ios/engine/PEPreflight.c` provides `cricket07_pe32_preflight()` to
+check a caller-owned byte buffer before any guest memory writes. It rejects
+truncated DOS/PE/section headers, non-x86 or PE32+ images, implausible
+image and section bounds, overlapping sections, invalid raw ranges, and
+entry points outside an executable section. It requires a non-empty import
+directory because the existing `load_image()` assumes one. On success it
+returns only basic image metadata; on failure it leaves output untouched.
+
+`ios-pe-preflight.yml` runs synthetic fixture tests under ASan/UBSan. The
+iPhone and Simulator static engine archives compile the preflight module,
+but the SwiftUI diagnostic app does not call it and no PE is loaded.
+**This is not a safe loader**: `runtime/runtime.c:load_image()` still trusts
+nested import descriptors, names and thunk chains, performs unchecked guest
+writes, and has no bounded error path. Before calling it with user files,
+validate all import-table and RVA-to-file mappings and make loading
+recoverable. The caller must enforce the 128 MiB file cap before reading a
+file into memory. No proprietary executable is included or tested.

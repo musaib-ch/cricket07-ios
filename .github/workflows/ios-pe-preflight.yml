@@ -1,0 +1,30 @@
+name: Cricket 07 iOS PE32 preflight
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/PEPreflight.*'
+      - 'ios/tests/ios_pe_preflight_test.c'
+      - '.github/workflows/ios-pe-preflight.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pe32-preflight:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test bounded read-only PE32 validation with sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=c11 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/PEPreflight.c ios/tests/ios_pe_preflight_test.c \
+            -o "$RUNNER_TEMP/pe32-preflight-test"
+          "$RUNNER_TEMP/pe32-preflight-test"
+          echo 'Synthetic PE32 preflight tests passed with ASan/UBSan; no game assets used.' >> "$GITHUB_STEP_SUMMARY"
