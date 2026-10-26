@@ -1,0 +1,31 @@
+name: Cricket 07 iOS launch readiness gate
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/EngineLaunchGate.*'
+      - 'ios/tests/ios_engine_launch_gate_test.c'
+      - '.github/workflows/ios-engine-launch-gate.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launch-readiness:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test pre-execution startup gating without game assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=gnu11 -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/EngineLaunchGate.c \
+            ios/tests/ios_engine_launch_gate_test.c \
+            -o "$RUNNER_TEMP/launch-readiness-test"
+          "$RUNNER_TEMP/launch-readiness-test"
+          echo 'Synthetic launch gate passed; no game code executed.' >> "$GITHUB_STEP_SUMMARY"
