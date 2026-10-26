@@ -1,0 +1,75 @@
+name: Boundary 07 iOS host
+on:
+  push:
+    branches: [codex/boundary07-ios-host]
+    paths: ['ios-boundary/**', '.github/workflows/boundary07-ios.yml']
+  pull_request:
+    paths: ['ios-boundary/**', '.github/workflows/boundary07-ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: boundary07-ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public host has no game-derived build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('ios-boundary/Boundary07/Resources')
+          forbidden = [p for p in root.rglob('*') if p.is_file() and (p.suffix.lower() in {'.wasm', '.exe', '.dll', '.big', '.gob', '.viv', '.vp6'} or p.name == 'recomp.js')]
+          if forbidden:
+              raise SystemExit('Public host must not contain compiled game code or assets: ' + ', '.join(map(str, forbidden)))
+          print('Only open-source host resources are included.')
+          PY
+          for file in ios-boundary/Boundary07/Resources/Web/*.js; do node --check "$file"; done
+      - name: Prepare Xcode project
+        run: |
+          brew install xcodegen
+          xcodebuild -version
+          cd ios-boundary && xcodegen generate
+      - name: Compile iPhone host
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios-boundary/Boundary07.xcodeproj -scheme Boundary07 -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release -derivedDataPath "$RUNNER_TEMP/BoundaryDevice" CODE_SIGNING_ALLOWED=NO build
+      - name: Test importer, local server, and simulator WebKit context
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl list devices available --json | python3 -c 'import sys,json; d=json.load(sys.stdin); a=[x["udid"] for r,v in d["devices"].items() if ".iOS-26" in r for x in v if x["name"].startswith("iPhone") and x.get("isAvailable")]; assert a,"No iOS 26 iPhone simulator installed"; print(a[0])')
+          xcodebuild -project ios-boundary/Boundary07.xcodeproj -scheme Boundary07 -sdk iphonesimulator -destination "id=$DEVICE" -destination-timeout 180 -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/BoundarySimulator" -resultBundlePath "$RUNNER_TEMP/Boundary07-tests.xcresult" CODE_SIGNING_ALLOWED=NO test
+      - name: Package host for local re-signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/BoundaryDevice/Build/Products/Release-iphoneos/Boundary07.app"
+          test -f "$APP/Web/index.html"
+          test ! -e "$APP/Web/build/recomp.wasm"
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --strict "$APP"
+          mkdir -p "$RUNNER_TEMP/BoundaryIPA/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/BoundaryIPA/Payload/"
+          (cd "$RUNNER_TEMP/BoundaryIPA" && zip -qr "$GITHUB_WORKSPACE/Boundary07-iOS-Host.ipa" Payload)
+          echo '### Boundary 07 iOS host candidate' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Open-source host only. No game code or assets. Ad-hoc signed for local re-signing; not an Apple-provisioned install.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Importer/server tests and a simulator capability report do not establish iPhone gameplay. Import the private bundle locally and test on the target device.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Boundary07-iOS-Host
+          path: Boundary07-iOS-Host.ipa
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Boundary07-test-results
+          path: ${{ runner.temp }}/Boundary07-tests.xcresult
+          if-no-files-found: ignore
+          retention-days: 7

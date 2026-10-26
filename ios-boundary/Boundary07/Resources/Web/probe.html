@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Boundary 07 device check</title>
+<link rel="stylesheet" href="boundary.css"><style>body{padding:55px 30px;max-width:950px;margin:auto}h1{font-size:36px;letter-spacing:-1px;margin:12px 0}#summary{color:var(--accent)}pre{background:#1b2417;padding:20px;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:12px;font:12px/1.6 monospace}p{color:var(--muted);max-width:700px}</style>
+<p class="eyebrow">BOUNDARY 07 / DEVICE CHECK</p><h1>Ready for the crease?</h1><p id="summary" role="status">Checking this app’s WebKit context…</p><p>These checks test required features. Passing them does not establish that the game fits in memory or plays correctly. The original game has a 1.25 GiB guest memory region plus stacks, assets and graphics.</p><pre id="report">Working…</pre>
+<script src="capabilities.js"></script><script>
+BoundaryCapabilities.run().then(r=>{document.getElementById('summary').textContent=r.allRequiredPassed?'Feature checks passed. Return to the pavilion to import and test the game.':'A required feature is missing. Return to the pavilion and export the device report.';document.getElementById('report').textContent=JSON.stringify(r,null,2)}).catch(e=>{document.getElementById('summary').textContent=String(e)});
+</script></html>
