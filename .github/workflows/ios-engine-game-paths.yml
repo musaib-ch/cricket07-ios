@@ -1,0 +1,30 @@
+name: Cricket 07 iOS game path preparation
+
+on:
+  push:
+    branches: [feature/ios-native-foundation]
+    paths:
+      - 'ios/engine/EngineGamePaths.*'
+      - 'ios/tests/ios_engine_game_paths_test.c'
+      - '.github/workflows/ios-engine-game-paths.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  game-paths:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test isolated game/user directory setup with sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang -std=gnu11 -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            ios/engine/EngineGamePaths.c \
+            ios/tests/ios_engine_game_paths_test.c \
+            -o "$RUNNER_TEMP/game-paths-test"
+          "$RUNNER_TEMP/game-paths-test"

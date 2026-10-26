@@ -249,3 +249,21 @@ automatically pull generated objects from an otherwise unused archive. The curre
 SwiftUI diagnostic app does not link those objects, load the executable,
 or start gameplay. This probe does not validate translated function coverage,
 rendering, or device behavior.
+
+## Native game and user-data directory setup (no executable startup)
+
+`cricket07_engine_configure_game_paths(game_directory, user_directory)`
+prepares the existing host filesystem globals for a future iOS engine
+startup. It canonicalizes two existing absolute directories, verifies the
+user-data directory is writable, rejects identical/nested roots, and refuses
+late changes after an image has loaded. Repeating the same configuration
+is harmless. Failures do not publish partial paths, and the function never
+creates directories or loads/executes a game. The isolated sanitizer test
+uses only temporary synthetic directories. Both native engine archives now
+compile the adapter.
+
+The app must still create/select its own sandboxed directories and invoke
+this adapter on the dedicated engine thread **before** any host file access.
+The legacy `map_path()` can follow symlinks within directories, so this is
+not a file-access sandbox or a complete path traversal security audit.
+Do not expose untrusted executable loading through the SwiftUI shell yet.

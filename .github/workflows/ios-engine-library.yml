@@ -11,6 +11,7 @@ on:
       - 'ios/engine/ControllerDirectInputAdapter.*'
       - 'ios/engine/EngineRenderBackend.*'
       - 'ios/engine/EngineBootstrap.*'
+      - 'ios/engine/EngineGamePaths.*'
       - 'ios/engine/PEPreflight.*'
       - 'ios/engine/PEImportsPreflight.*'
       - 'ios/engine/PELoadGate.*'
@@ -56,6 +57,7 @@ jobs:
             ios/engine/ControllerDirectInputAdapter.c
             ios/engine/EngineRenderBackend.c
             ios/engine/EngineBootstrap.c
+            ios/engine/EngineGamePaths.c
             ios/engine/PEPreflight.c
             ios/engine/PEImportsPreflight.c
             ios/engine/PELoadGate.c
@@ -111,6 +113,9 @@ jobs:
           grep -Fq '_cricket07_engine_translated_functions_installed' "$OUT/bootstrap-symbols.txt"
           grep -Fq '_cricket07_engine_linked_translated_functions_available' "$OUT/bootstrap-symbols.txt"
           grep -Fq '_cricket07_engine_install_linked_translated_functions' "$OUT/bootstrap-symbols.txt"
+          xcrun nm -g "$OUT/objects/ios_engine_EngineGamePaths.c.o" > "$OUT/game-paths-symbols.txt"
+          grep -Fq '_cricket07_engine_configure_game_paths' "$OUT/game-paths-symbols.txt"
+          grep -Fq '_cricket07_engine_game_paths_configured' "$OUT/game-paths-symbols.txt"
           xcrun nm -g "$OUT/objects/ios_engine_PEPreflight.c.o" | grep -Fq '_cricket07_pe32_preflight'
           xcrun nm -g "$OUT/objects/ios_engine_PEImportsPreflight.c.o" | grep -Fq '_cricket07_pe32_imports_preflight'
           xcrun nm -g "$OUT/objects/ios_engine_PELoadGate.c.o" | grep -Fq '_cricket07_pe32_load_gate'
