@@ -57,18 +57,18 @@ int cricket07_engine_resolve_loaded_entrypoint(GuestFn *out_fn, uint32_t *out_ad
 int cricket07_engine_install_translated_functions(void (*registrar)(void));
 int cricket07_engine_translated_functions_installed(void);
 
-/* Non-executing weak-link check for generated register_all_functions().
- * Returns 0 when generated game code is absent, without consuming the
- * one-shot registration attempt. A weak reference does NOT force a static
- * archive containing the generated code to be linked into the final app.
- * The caller must explicitly link the generated translation object(s).
+/* Compile-time gate for a generated register_all_functions() symbol.
+ * The default diagnostic build returns 0 without a symbol reference.
+ * Build with CRICKET07_LINKED_TRANSLATED_REGISTRY only when the generated
+ * translation objects are explicitly linked into the final application.
+ * Linking without those objects will correctly fail at link time.
  */
 int cricket07_engine_linked_translated_functions_available(void);
 
-/* Install the linked generated registry, if present, using the existing
+/* Install the explicitly linked generated registry using the existing
  * one-shot registration gate. No translated game function is executed.
  * The loaded executable and guest must already be prepared on the engine
- * startup thread. A missing registry leaves registration retryable.
+ * startup thread. Disabled builds leave registration retryable.
  */
 int cricket07_engine_install_linked_translated_functions(void);
 

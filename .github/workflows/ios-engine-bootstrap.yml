@@ -23,7 +23,11 @@ jobs:
         run: |
           set -euo pipefail
           for mode in TEST_VALID TEST_IMPORT_FAILURE TEST_RECORDER_FAILURE TEST_MEMORY_FAILURE TEST_REGISTRY_FAILURE TEST_LINKED_REGISTRY; do
-            clang -std=gnu11 -Wall -Wextra -Werror "-D$mode" \
+            extra=()
+            if [ "$mode" = TEST_LINKED_REGISTRY ]; then
+              extra+=(-DCRICKET07_LINKED_TRANSLATED_REGISTRY)
+            fi
+            clang -std=gnu11 -Wall -Wextra -Werror "-D$mode" "${extra[@]}" \
               -Iios/engine -Ihost \
               ios/engine/EngineBootstrap.c \
               ios/tests/ios_engine_bootstrap_test.c \

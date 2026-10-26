@@ -233,18 +233,19 @@ controller input during gameplay and device testing remain outstanding.
 
 The engine bootstrap now exports
 `cricket07_engine_linked_translated_functions_available()` and
-`cricket07_engine_install_linked_translated_functions()`. The former
-checks whether a generated `register_all_functions()` implementation is
-actually linked; the latter delegates to the existing one-shot registry
-handoff only when that symbol exists. Missing game-derived code returns
-failure without consuming the registration attempt or executing game code.
-The macOS bootstrap regression tests both a missing weak symbol and a
+`cricket07_engine_install_linked_translated_functions()`. The default
+diagnostic build reports no generated registry and does not reference
+`register_all_functions()`. When compiled with
+`CRICKET07_LINKED_TRANSLATED_REGISTRY`, the adapter requires the generated
+symbol at link time and delegates to the existing one-shot registration gate.
+Missing game-derived code cannot silently pass the final link step.
+The macOS bootstrap regression tests both the disabled mode and a
 synthetic linked registrar. Both iPhone and Simulator engine archives check
 for the exported APIs.
 
-**Important:** Weak references do not cause static linkers to extract
-otherwise unused generated objects from an archive. A future app integration
-must explicitly include its user-generated translation objects. The current
+**Important:** The final app must explicitly link its user-generated
+translation objects and enable the opt-in macro. This does not
+automatically pull generated objects from an otherwise unused archive. The current
 SwiftUI diagnostic app does not link those objects, load the executable,
 or start gameplay. This probe does not validate translated function coverage,
 rendering, or device behavior.
