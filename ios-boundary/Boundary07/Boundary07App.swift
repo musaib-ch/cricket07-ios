@@ -171,8 +171,13 @@ struct GameScreen: View {
         ZStack {
             if let base = model.baseURL, !model.resetting { BoundaryWebView(model: model, url: URL(string: model.page, relativeTo: base)!.absoluteURL).id(model.webSessionID).ignoresSafeArea() }
         }.overlay(alignment: .topLeading) {
-            Button { model.releaseTouchControls(); model.showingWeb = false } label: {
-                Label("Pavilion", systemImage: "chevron.left").font(.caption.bold()).padding(9).background(.ultraThinMaterial, in: Capsule())
+            HStack(spacing: 8) {
+                Button { model.releaseTouchControls(); model.showingWeb = false } label: {
+                    Label("Pavilion", systemImage: "chevron.left").font(.caption.bold()).padding(9).background(.ultraThinMaterial, in: Capsule())
+                }
+                if let file = model.saveBackupURL {
+                    ShareLink(item: file) { Image(systemName: "square.and.arrow.up").padding(9).background(.regularMaterial, in: Capsule()) }.accessibilityLabel("Share saved-progress backup")
+                }
             }.padding(12)
         }.overlay(alignment: .center) {
             if let problem = model.gameProblem {
@@ -185,8 +190,6 @@ struct GameScreen: View {
             } else if model.launching || model.resetting {
                 HStack { ProgressView(); Text(model.resetting ? "Closing previous game…" : "Starting game…").font(.caption) }.padding(14).background(.regularMaterial, in: Capsule()).allowsHitTesting(false)
             }
-        }.overlay(alignment: .bottomLeading) {
-            if let file = model.saveBackupURL { ShareLink(item: file) { Label("Share backup", systemImage: "square.and.arrow.up").font(.caption.bold()).padding(10).background(.regularMaterial, in: Capsule()) }.padding(10) }
         }.onChange(of: model.running) { _, running in UIApplication.shared.isIdleTimerDisabled = running }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in model.releaseTouchControls() }
         .onDisappear { model.releaseTouchControls() }
