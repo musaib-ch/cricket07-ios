@@ -1,0 +1,7 @@
+*.xcodeproj/
+Boundary07/Generated-Info.plist
+DerivedData/
+Private/
+*.ipa
+*.wasm
+recomp.js
