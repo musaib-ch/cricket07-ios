@@ -2,7 +2,7 @@
 
 This is the open-source iOS host for the locally generated Boundary 07 WebAssembly build. The app imports a private folder through Files, verifies the runtime and executable hashes, and serves its resources only through an on-device loopback origin. It never uploads game inputs to GitHub.
 
-The host targets iOS 26 and landscape iPhone/iPad. Version 0.2.0 (3) uses a pointer-capture touch controller with independent finger ownership. The upstream browser Gamepad API remains available for physical controllers, subject to device testing.
+The host targets iOS 26 and landscape iPhone/iPad. Version 0.3.0 (4) uses a pointer-capture touch controller with independent finger ownership. The upstream browser Gamepad API remains available for physical controllers, subject to device testing.
 
 ## Touch controls
 
@@ -10,7 +10,7 @@ The host targets iOS 26 and landscape iPhone/iPad. Version 0.2.0 (3) uses a poin
 - Xbox-style face layout: A = S, B = D, X = A, Y = W. Small letters show the original keyboard bindings. Assign the keyboard player to your team in the game.
 - LOFT toggles Shift on or off; it stays held through shot presses. START sends Escape, SELECT sends Tab. These are separate buttons.
 - Drag the clear middle area as a relative mouse trackpad. Lift and drag again to move farther; a short stationary tap clicks the left mouse button. This does not require browser pointer lock.
-- Screen: Fit keeps the game's 4:3 proportions. Fill stretches it across the display. Quality: Performance = 960×720, Balanced = 1280×960 (default), Sharp = 1600×1200. Settings persist locally. Viewport sizing follows the visible screen, and controls respect safe areas.
+- Screen: Fit keeps the game's 4:3 proportions. Fill stretches it across the display. Quality: Performance = 960×720 (new default), Balanced = 1280×960, Sharp = 1600×1200. Settings persist locally. Viewport sizing follows the visible screen, and controls respect safe areas.
 - Hide controls releases every held touch input and returns direct canvas interaction for external input. Backgrounding, interrupted touches, dialogs and leaving the game release inputs and switch Loft off.
 
 Update the same installed app using the same Sideloadly signing identity and bundle identifier to retain its private imported files. This host-only update needs no replacement game bundle.
@@ -39,3 +39,13 @@ The Windows-generated `recomp.js`/`recomp.wasm` are privately imported at runtim
 The workflow compiles a physical-device app, tests synthetic private-bundle imports (including corrupted inputs and links), checks local server streaming and headers, records a simulator WKWebView capability report, and exercises concurrent controller inputs against fake engine exports in WebKit. No real game files are used in CI. An IPA build, passing unit tests, or a simulator report does not establish gameplay on iPhone 17. Simulated pointer tests do not replace physical multitouch checks on the phone.
 
 The original Cricket 07 menus remain EA game content. Boundary 07 supplies the custom launcher and host. Upstream MIT attribution is preserved under `Resources/Web/LICENSE.txt` and About.
+
+## 0.3.0 stability and saved progress
+
+The game web view locks its scale and disables pinch zoom. Game controls cancel double-tap and gesture zoom; text inputs use 16px text to avoid iOS input-focus zoom. Viewport layout follows the layout window rather than feeding pinch-scaled visual viewport dimensions back into the canvas.
+
+A Play guard permits one runtime per page. Startup progress clears after an actual presented frame, not just wasm module creation. GPU/runtime errors and missing-frame timeouts surface a recovery panel. Restart unloads the previous page and its workers before creating a fresh Performance-mode page. Backgrounded solo sessions skip the busy GPU polling interval, and presentation is capped at 60 Hz. The game still reserves its existing guest memory; these changes do not guarantee that iOS will never terminate it under memory pressure.
+
+Saves remains the game's file-based system, explicitly mapped to the persistent OPFS `userdata` directory. **Saves** in the touch bar opens profile/save name entry and local backup export. Select the in-game name field first, then send text. Create/load a profile and use the game's save menus; continuing without a profile does not create one automatically. **Saved progress** in the native pavilion lists these files and can export or restore a validated JSON backup. Restore is blocked while a game is loaded and rolls back its previous files if writing the replacement fails. Native backup export writes only the bounded saved-file bundle into app Documents for sharing to Files. Game assets and private runtime files are untouched.
+
+There is no instant match snapshot. Unsaved live match state cannot be recovered after the process closes; only progress that Cricket 07 writes to its save files can be restored. Device checks, desktop tests and a successful IPA do not establish that every save mode or full match works on the phone.

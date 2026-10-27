@@ -55,6 +55,17 @@ final class Boundary07Tests: XCTestCase {
         XCTAssertThrowsError(try LoopbackServer.relativeGamePath(source.appendingPathComponent("GameOther/file.bin"), root: source.appendingPathComponent("Game")))
     }
 
+    func testSavedProgressBackupRejectsUnsafeAndDuplicatePaths() throws {
+        let file: [String: Any] = ["path": "Profiles/test.sav", "base64": Data([1, 2, 3]).base64EncodedString()]
+        let valid: [String: Any] = ["format": "boundary07-saves-v1", "files": [file]]
+        XCTAssertFalse(try SaveBackup.validate(valid).isEmpty)
+        for path in ["../outside", "/absolute", "Profiles//x", "Profiles/./x", "C:/x", "Profiles\\x"] {
+            XCTAssertThrowsError(try SaveBackup.validate(["format": "boundary07-saves-v1", "files": [["path": path, "base64": "AQ=="]]]))
+        }
+        XCTAssertThrowsError(try SaveBackup.validate(["format": "boundary07-saves-v1", "files": [file, file]]))
+        XCTAssertThrowsError(try SaveBackup.validate(["format": "boundary07-saves-v1", "files": [["path": "x", "base64": "invalid!"]]]))
+    }
+
     @MainActor func testLocalServerHeadersStreamingAndWKCapabilities() async throws {
         let source = try fixture()
         let storage = try PackageStorage(root: temporary.appendingPathComponent("Storage"))
@@ -141,6 +152,29 @@ final class Boundary07Tests: XCTestCase {
         XCTAssertEqual(input["loftOnly"] as? String, "225")
         XCTAssertEqual(input["released"] as? Bool, true)
         XCTAssertEqual(input["mouseMoved"] as? Bool, true)
+        let sessionSource = try String(contentsOf: web.appendingPathComponent("mobile-session.js"), encoding: .utf8)
+        _ = try await view.evaluateJavaScript(sessionSource)
+        let singleLaunch = try await view.evaluateJavaScript("BoundarySession.begin() && !BoundarySession.begin()")
+        XCTAssertEqual(singleLaunch as? Bool, true)
+        _ = try await view.evaluateJavaScript("BoundarySession.frame();void 0")
+        let sessionState = try await view.evaluateJavaScript("BoundarySession.state")
+        XCTAssertEqual(sessionState as? String, "running")
+        // Stop the synthetic session before restore: live game files must never be replaced.
+        _ = try await view.evaluateJavaScript("delete window.recomp;window.BoundarySession={active:false};void 0")
+        let savesSource = try String(contentsOf: web.appendingPathComponent("saves.js"), encoding: .utf8)
+        _ = try await view.evaluateJavaScript(savesSource)
+        if let checks = report["checks"] as? [String: [String: Any]], checks["privateStorage"]?["pass"] as? Bool == true {
+            let saveResult = try await view.callAsyncJavaScript("""
+            await BoundarySaves.prepare();
+            const backup={format:'boundary07-saves-v1',files:[{path:'Profiles/test.sav',base64:'AQID'}]};
+            await BoundarySaves.restore(backup);
+            const saved=await BoundarySaves.backup();
+            let rejected=false;try{await BoundarySaves.restore({format:'boundary07-saves-v1',files:[{path:'../outside',base64:'AQ=='}]})}catch{rejected=true}
+            const after=await BoundarySaves.backup();
+            return saved.files[0].base64==='AQID'&&after.files[0].base64==='AQID'&&rejected;
+            """, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(saveResult as? Bool, true)
+        }
         view.stopLoading(); configuration.userContentController.removeScriptMessageHandler(forName: "boundary")
     }
 }

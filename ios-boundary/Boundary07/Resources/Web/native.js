@@ -3,6 +3,7 @@ window.BoundaryNative={
   async prepare(){
     const report=await BoundaryCapabilities.run();
     if(!report.allRequiredPassed)throw Error('This WebKit context is missing a required feature. Return to the pavilion and export the device report.');
+    await window.BoundarySaves?.prepare();
     const response=await fetch('native-manifest.json');
     if(!response.ok)throw Error('Import your private bundle in the native pavilion first.');
     const manifest=await response.json();

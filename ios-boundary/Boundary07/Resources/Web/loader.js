@@ -23,7 +23,7 @@ const NETPLAY_BASE = new URL(params.get('netplay') || './', location.href).href.
 const status = (t) => { $('status').textContent = t; };
 // the launcher's screens (index.html): loading, home, online, lobby
 const show = (view) => { for (const v of document.querySelectorAll('#panel .view')) v.classList.toggle('hidden', v.id !== 'view-' + view); };
-const fail = (e) => { document.body.classList.remove('playing'); status('Error: ' + e.message); $('panel').classList.remove('hidden'); show('loading'); };
+const fail = (e) => { window.BoundarySession?.fail(e); document.body.classList.remove('playing'); status('Error: ' + e.message); $('panel').classList.remove('hidden'); show('loading'); };
 const mb = (n) => (n / 1e6).toFixed(0);
 
 // ------------------------------------------------------------------ game files in OPFS
@@ -279,6 +279,7 @@ function showNetStatus(M, session) {
 }
 
 async function run(session) {
+  if (window.BoundarySession && !BoundarySession.begin()) return;
   document.body.classList.add('playing');
   $('panel').classList.add('hidden');
   fullscreenTip();
@@ -288,10 +289,13 @@ async function run(session) {
   script.src = 'build/recomp.js';
   await new Promise((ok, fail) => { script.onload = ok; script.onerror = fail; document.head.appendChild(script); });
   const M = await createRecomp({
+    onAbort: reason => window.BoundarySession?.fail(Error('Runtime stopped: ' + reason)),
+    onExit: code => window.BoundarySession?.fail(Error('The game exited (' + code + '). Restart to play again.')),
     arguments: ['/opfs/' + OPFS_DIR],
     print: (t) => console.log(t),
-    printErr: (t) => console.log(t),
+    printErr: (t) => { console.log(t); window.BoundarySession?.log(t); },
     preRun: [(m) => {
+      m.ENV.RC_USERDATA = '/opfs/userdata';
       if (params.has('mute')) m.ENV.RC_NO_AUDIO = '1';
       if (params.get('exe')) m.ENV.RC_EXE = params.get('exe');
       if (params.has('log')) m.ENV.RC_LOG = '1';
@@ -317,15 +321,16 @@ async function run(session) {
   // tolerance so a 60 Hz display's own jitter doesn't skip one.
   let due = 0;
   const frame = (t) => {
+    if (window.BoundarySession?.state === 'failed') return;
     poll(M);
-    if (!session || t >= due - 4) {
-      if (M._rc_gpu_pump(1)) { due = Math.max(due + 1000 / 60, t - 4); }
+    if (t >= due - 4) {
+      if (M._rc_gpu_pump(1)) { window.BoundarySession?.frame(); due = Math.max(due + 1000 / 60, t - 4); }
     } else M._rc_gpu_pump(0);   // mid-frame readbacks only
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
   // readbacks mid-frame are answered without waiting for vsync; online, the pad is also sampled here
-  setInterval(() => { if (session) poll(M); M._rc_gpu_pump(0); }, 1);
+  setInterval(() => { if (document.hidden || window.BoundarySession?.state === 'failed') return; if (session) poll(M); M._rc_gpu_pump(0); }, 8);
   // Online, a hidden tab still has to present frames (browsers pause requestAnimationFrame there), or the
   // lockstep would freeze every other player with it.
   if (session) setInterval(() => { if (document.hidden) { poll(M); M._rc_gpu_pump(1); } }, 16);

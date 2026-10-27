@@ -11,6 +11,11 @@ import UniformTypeIdentifiers
     @Published var showingWeb = false
     @Published var pickingFolder = false
     @Published var running = false
+    @Published var launching = false
+    @Published var resetting = false
+    @Published var gameProblem: String?
+    @Published var webSessionID = UUID()
+    @Published var saveBackupURL: URL?
     @Published var baseURL: URL?
     var page = "probe.html"
     weak var webView: WKWebView?
@@ -34,7 +39,7 @@ import UniformTypeIdentifiers
     }
     func open(_ page: String) {
         guard baseURL != nil else { return }
-        self.page = page; running = false; showingWeb = true
+        self.page = page; running = false; launching = false; gameProblem = nil; webSessionID = UUID(); showingWeb = true
     }
     func importSelected(_ result: Result<[URL], Error>) {
         switch result {
@@ -58,10 +63,31 @@ import UniformTypeIdentifiers
             checksPassed = data["allRequiredPassed"] as? Bool == true
             if let bytes = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted, .sortedKeys]), let text = String(data: bytes, encoding: .utf8) { report = text }
             message = checksPassed ? "Required features passed. Real game execution still needs testing." : "This WebKit context is missing a required feature. See the device report."
+        case "starting": launching = true; gameProblem = nil
+        case "first-frame": launching = false; gameProblem = nil
+        case "save-backup":
+            do {
+                guard let backup = object["backup"] as? [String: Any] else { return }
+                let data = try SaveBackup.validate(backup)
+                let file = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Boundary07-Saved-Progress.json")
+                try data.write(to: file, options: .atomic); saveBackupURL = file
+            } catch { message = error.localizedDescription; gameProblem = error.localizedDescription }
         case "running": webView?.scrollView.isScrollEnabled = false; webView?.scrollView.bounces = false; running = true; message = "WebAssembly runtime started. Menu and match play still need device verification."
-        case "error": message = object["message"] as? String ?? "The game runtime stopped."
+        case "error":
+            message = object["message"] as? String ?? "The game runtime stopped."
+            gameProblem = message; launching = false
+            if let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) { report += "\n\nLast runtime error:\n" + String(decoding: data, as: UTF8.self) }
         case "import": showingWeb = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.pickingFolder = true }
         default: break
+        }
+    }
+    func restartGame() {
+        guard !resetting else { return }
+        releaseTouchControls(); running = false; launching = false; gameProblem = nil
+        resetting = true
+        webView?.stopLoading(); webView?.navigationDelegate = nil; webView?.loadHTMLString("", baseURL: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            self.page = "index.html?safe=1"; self.webSessionID = UUID(); self.resetting = false
         }
     }
     func releaseTouchControls() {
@@ -99,6 +125,8 @@ struct PavilionView: View {
                             Label(model.imported ? "Replace private bundle" : "Import private bundle", systemImage: "folder.badge.plus")
                                 .frame(maxWidth: .infinity).padding(5)
                         }.disabled(model.busy).buttonStyle(.bordered)
+                        Button { model.open("saves.html") } label: { Label("Saved progress", systemImage: "externaldrive").frame(maxWidth: .infinity) }
+                            .buttonStyle(.bordered).disabled(model.baseURL == nil || model.busy)
                         Text("Select the folder containing bundle.json, Runtime and Game in Files.").font(.caption2).foregroundStyle(.secondary)
                         Button { model.open("probe.html") } label: {
                             Label("Check this device", systemImage: "checkmark.shield").frame(maxWidth: .infinity).padding(5)
@@ -141,11 +169,24 @@ struct GameScreen: View {
     @ObservedObject var model: BoundaryModel
     var body: some View {
         ZStack {
-            if let base = model.baseURL { BoundaryWebView(model: model, url: base.appendingPathComponent(model.page)).ignoresSafeArea() }
+            if let base = model.baseURL, !model.resetting { BoundaryWebView(model: model, url: URL(string: model.page, relativeTo: base)!.absoluteURL).id(model.webSessionID).ignoresSafeArea() }
         }.overlay(alignment: .topLeading) {
             Button { model.releaseTouchControls(); model.showingWeb = false } label: {
                 Label("Pavilion", systemImage: "chevron.left").font(.caption.bold()).padding(9).background(.ultraThinMaterial, in: Capsule())
             }.padding(12)
+        }.overlay(alignment: .center) {
+            if let problem = model.gameProblem {
+                VStack(spacing: 12) {
+                    Text("Game recovery").font(.headline)
+                    Text(problem).font(.caption).multilineTextAlignment(.center)
+                    Button("Restart in Performance mode") { model.restartGame() }.buttonStyle(.borderedProminent)
+                    Button("Return to pavilion") { model.showingWeb = false }
+                }.padding(22).frame(maxWidth: 420).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            } else if model.launching || model.resetting {
+                HStack { ProgressView(); Text(model.resetting ? "Closing previous game…" : "Starting game…").font(.caption) }.padding(14).background(.regularMaterial, in: Capsule()).allowsHitTesting(false)
+            }
+        }.overlay(alignment: .bottomLeading) {
+            if let file = model.saveBackupURL { ShareLink(item: file) { Label("Share backup", systemImage: "square.and.arrow.up").font(.caption.bold()).padding(10).background(.regularMaterial, in: Capsule()) }.padding(10) }
         }.onChange(of: model.running) { _, running in UIApplication.shared.isIdleTimerDisabled = running }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in model.releaseTouchControls() }
         .onDisappear { model.releaseTouchControls() }
