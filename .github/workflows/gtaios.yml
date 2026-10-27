@@ -1,0 +1,39 @@
+name: GTAiOS host
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'gtaios/**'
+      - '.github/workflows/gtaios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd gtaios && xcodegen generate --spec project.yml
+      - name: Build iOS host
+        run: |
+          set -euo pipefail
+          xcodebuild -project gtaios/GTAiOS.xcodeproj -scheme GTAiOS -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/Derived" CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Derived/Build/Products/Debug-iphoneos/GTAiOS.app"
+          test -d "$APP"
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qr "$GITHUB_WORKSPACE/GTAiOS-adhoc.ipa" Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GTAiOS-adhoc
+          path: GTAiOS-adhoc.ipa
+          if-no-files-found: error
+          retention-days: 14
