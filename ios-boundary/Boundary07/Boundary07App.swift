@@ -29,16 +29,23 @@ import UniformTypeIdentifiers
             UserDefaults.standard.set(token, forKey: "BoundaryOriginToken")
             let server = LoopbackServer(webRoot: web, token: token, package: { storage.current })
             self.server = server
-            server.start { [weak self] result in
+            server.start(port: 0) { [weak self] result in
                 switch result {
-                case .success(let url): self?.baseURL = url
-                case .failure(let error): self?.message = "Local runtime could not start: " + error.localizedDescription
+                case .success(let url):
+                    self?.baseURL = url
+                    self?.message = "Local runtime ready."
+                case .failure(let error):
+                    self?.baseURL = nil
+                    self?.message = "Local runtime could not start: " + error.localizedDescription
                 }
             }
         } catch { message = error.localizedDescription }
     }
     func open(_ page: String) {
-        guard baseURL != nil else { return }
+        guard baseURL != nil else {
+            message = "Local runtime is still starting…"
+            return
+        }
         self.page = page; running = false; launching = false; gameProblem = nil; webSessionID = UUID(); showingWeb = true
     }
     func importSelected(_ result: Result<[URL], Error>) {

@@ -13,10 +13,14 @@ final class LoopbackServer {
     init(webRoot: URL, token: String, package: @escaping () -> URL?) {
         self.webRoot = webRoot; self.token = token; self.package = package
     }
-    func start(port: UInt16 = 8077, completion: @escaping (Result<URL, Error>) -> Void) {
+    func start(port: UInt16 = 0, completion: @escaping (Result<URL, Error>) -> Void) {
         do {
             let params = NWParameters.tcp
-            params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
+            // Let iOS choose an unused loopback port. A fixed port can remain
+            // occupied briefly while a previous WebKit session is tearing down.
+            if port != 0 {
+                params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
+            }
             params.allowLocalEndpointReuse = true
             let listener = try NWListener(using: params)
             self.listener = listener
