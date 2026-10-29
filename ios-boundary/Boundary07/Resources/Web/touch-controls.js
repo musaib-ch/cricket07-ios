@@ -62,7 +62,7 @@
     if(overlay)return;
     overlay=document.createElement('section');overlay.id='b07-controls';overlay.setAttribute('aria-label','Touch controller');
     overlay.innerHTML=`<div class="b07-trackpad" aria-label="Mouse trackpad: drag to move, tap to click"><span>DRAG TO MOVE POINTER · TAP TO CLICK</span></div>
-      <div class="b07-settings"><button data-action="visibility">Hide controls</button><button data-action="saves">Saves</button><label>Screen <select id="b07-fit"><option value="fit">Fit · 4:3</option><option value="fill">Fill screen</option></select></label><label>Quality <select id="b07-quality"><option value="720">Performance</option><option value="960">Balanced</option><option value="1200">Sharp</option></select></label></div>
+      <button class="b07-menu-button" data-action="menu" aria-expanded="false" aria-label="Options">☰</button><div class="b07-settings" hidden><button data-action="visibility">Hide controls</button><button data-action="saves">Saves</button><label>Screen <select id="b07-fit"><option value="fit">Fit · 4:3</option><option value="fill">Fill screen</option></select></label></div>
       <button class="b07-loft" data-action="loft" aria-pressed="false">LOFT OFF</button>
       <div class="b07-stick" role="group" aria-label="Direction stick"><span class="b07-cross">✛</span><div class="b07-thumb"></div></div>
       <div class="b07-face"><button class="b07-y" data-key="KeyW" aria-label="Y, W">Y<small>W</small></button><button class="b07-x" data-key="KeyA" aria-label="X, A">X<small>A</small></button><button class="b07-b" data-key="KeyD" aria-label="B, D">B<small>D</small></button><button class="b07-a" data-key="KeyS" aria-label="A, S">A<small>S</small></button></div>
@@ -94,16 +94,22 @@
       reset();const hidden=overlay.classList.toggle('controls-hidden');overlay.querySelector('[data-action="visibility"]').textContent=hidden?'Show controls':'Hide controls';
     };
     overlay.querySelector('[data-action="saves"]').onclick=()=>window.BoundarySaves?.showTools();
-    const fit=overlay.querySelector('#b07-fit'),quality=overlay.querySelector('#b07-quality');
-    try{fit.value=localStorage.getItem('b07-fit')||'fit';quality.value=localStorage.getItem('b07-quality')||'720'}catch{}
-    if(!['fit','fill'].includes(fit.value))fit.value='fit';if(!['720','960','1200'].includes(quality.value))quality.value='720';
-    if(new URLSearchParams(location.search).has('safe')){fit.value='fit';quality.value='720'}
+    const fit=overlay.querySelector('#b07-fit');
+    try{fit.value=localStorage.getItem('b07-fit')||'fit'}catch{}
+    if(!['fit','fill'].includes(fit.value))fit.value='fit';
+    if(new URLSearchParams(location.search).has('safe'))fit.value='fit';
     function settings(){
       reset();document.body.classList.toggle('b07-fill',fit.value==='fill');
-      window.BoundaryViewport.height=Number(quality.value);window.dispatchEvent(new Event('resize'));
-      try{localStorage.setItem('b07-fit',fit.value);localStorage.setItem('b07-quality',quality.value)}catch{}
+      window.dispatchEvent(new Event('resize'));
+      try{localStorage.setItem('b07-fit',fit.value)}catch{}
     }
-    fit.onchange=settings;quality.onchange=settings;settings();
+    fit.onchange=settings;settings();
+    overlay.querySelector('[data-action="menu"]').onclick=()=>{
+      const menu=overlay.querySelector('.b07-settings'),open=menu.hasAttribute('hidden');
+      if(open)menu.removeAttribute('hidden');else menu.setAttribute('hidden','');
+      overlay.querySelector('[data-action="menu"]').setAttribute('aria-expanded',String(open));
+    };
+    setTimeout(()=>overlay.querySelector('.b07-trackpad span')?.classList.add('faded'),3500);
   }
   function viewport(){
     document.documentElement.style.setProperty('--b07-w',innerWidth+'px');document.documentElement.style.setProperty('--b07-h',innerHeight+'px');

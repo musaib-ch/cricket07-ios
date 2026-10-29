@@ -1,10 +1,12 @@
 #b07-controls{position:fixed;inset:0;z-index:80;pointer-events:none;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif;color:white;--b07-edge:max(18px,env(safe-area-inset-left));--b07-right:max(18px,env(safe-area-inset-right));--b07-bottom:max(15px,env(safe-area-inset-bottom))}
 #b07-controls button,#b07-controls select{font:700 11px system-ui;color:#fff;background:#101910bd;border:1px solid #ffffff55;border-radius:20px;padding:9px 13px;outline-offset:3px}
 #b07-controls button,.b07-stick,.b07-trackpad{touch-action:none;pointer-events:auto;-webkit-tap-highlight-color:transparent}
-.b07-settings{position:absolute;top:max(12px,env(safe-area-inset-top));right:var(--b07-right);display:flex;gap:8px;align-items:center;pointer-events:auto}
-.b07-settings label{font-size:10px;display:flex;align-items:center;gap:5px}.b07-settings select{max-width:115px}
-.b07-trackpad{position:absolute;inset:65px 0 0}.b07-trackpad span{position:absolute;left:50%;top:4px;transform:translateX(-50%);font-size:8px;letter-spacing:1px;opacity:.45;white-space:nowrap}
-.b07-stick{position:absolute;width:120px;height:120px;left:calc(var(--b07-edge) + 12px);bottom:calc(var(--b07-bottom) + 5px);border-radius:50%;background:#10191065;border:2px solid #ffffff55}
+.b07-menu-button{position:absolute;top:max(12px,env(safe-area-inset-top));right:var(--b07-right);min-width:42px!important;min-height:38px!important;padding:5px!important;font-size:20px!important;line-height:1}
+.b07-settings{position:absolute;top:58px;right:var(--b07-right);display:flex;flex-direction:column;gap:8px;align-items:stretch;padding:10px;background:#101910ee;border:1px solid #ffffff33;border-radius:14px;pointer-events:auto;min-width:150px;box-shadow:0 5px 20px #0009}
+.b07-settings[hidden]{display:none}
+.b07-settings label{font-size:10px;display:flex;align-items:center;justify-content:space-between;gap:5px}.b07-settings select{max-width:100px}
+.b07-trackpad{position:absolute;inset:65px 0 0}.b07-trackpad span{position:absolute;left:50%;top:4px;transform:translateX(-50%);font-size:8px;letter-spacing:1px;opacity:.45;white-space:nowrap;transition:opacity .5s}.b07-trackpad span.faded{opacity:0}
+.b07-stick{position:absolute;width:120px;height:120px;left:calc(var(--b07-edge) + 12px);bottom:calc(var(--b07-bottom) + 5px);border-radius:50%;background:#10191065;border:2px solid #ffffff55;box-sizing:border-box}
 .b07-cross{position:absolute;inset:0;display:grid;place-items:center;color:#ffffff44;font-size:95px}.b07-thumb{position:absolute;left:50%;top:50%;width:49px;height:49px;border-radius:50%;background:#d4f55cbb;box-shadow:0 2px 12px #0008;transform:translate(-50%,-50%);pointer-events:none}
 #b07-controls .b07-loft{position:absolute;left:calc(var(--b07-edge) + 23px);bottom:calc(var(--b07-bottom) + 140px);min-width:100px}
 #b07-controls .on,#b07-controls .pressed{background:#d4f55c;box-shadow:0 0 15px #d4f55c55;color:#101910}
@@ -12,6 +14,7 @@
 #b07-controls .b07-face button{position:absolute;width:55px;height:55px;border-radius:50%;padding:4px;font-size:21px;line-height:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#101910bd}
 .b07-face small{font-size:9px;line-height:11px;color:#ffffffaa}.b07-face .b07-y{top:0;left:57px;color:#ffdd58!important}.b07-face .b07-x{top:57px;left:0;color:#70b8ff!important}.b07-face .b07-b{top:57px;right:0;color:#ff7878!important}.b07-face .b07-a{bottom:0;left:57px;color:#8fea91!important}
 #b07-controls .b07-face .pressed{background:#425039;box-shadow:0 0 12px #d4f55c88;border-color:#d4f55c}
-.b07-system{position:absolute;bottom:var(--b07-bottom);left:50%;transform:translateX(-50%);display:flex;gap:15px}
-.controls-hidden .b07-stick,.controls-hidden .b07-face,.controls-hidden .b07-loft,.controls-hidden .b07-system,.controls-hidden .b07-trackpad{display:none}
+.b07-system{position:absolute;top:max(12px,env(safe-area-inset-top));left:calc(var(--b07-edge) + 115px);display:flex;gap:5px;padding:4px;background:#101910bd;border:1px solid #ffffff33;border-radius:16px}
+.b07-system button{font-size:10px!important;padding:6px 9px!important;border-radius:12px!important}
+.controls-hidden .b07-stick,.controls-hidden .b07-face,.controls-hidden .b07-loft,.controls-hidden .b07-trackpad{display:none}
 @media(max-height:350px){.b07-stick{width:100px;height:100px}.b07-face{transform:scale(.85);transform-origin:bottom right}#b07-controls .b07-loft{bottom:calc(var(--b07-bottom) + 115px)}.b07-settings{gap:4px}.b07-trackpad span{display:none}}
