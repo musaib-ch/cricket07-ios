@@ -97,6 +97,20 @@ import UniformTypeIdentifiers
             self.page = "index.html?safe=1"; self.webSessionID = UUID(); self.resetting = false
         }
     }
+    func stopRuntime() {
+        guard !resetting else { return }
+        releaseTouchControls()
+        running = false; launching = false; gameProblem = nil
+        resetting = true
+        webView?.stopLoading()
+        webView?.navigationDelegate = nil
+        webView?.loadHTMLString("", baseURL: nil)
+        webView = nil
+        showingWeb = false
+        webSessionID = UUID()
+        UIApplication.shared.isIdleTimerDisabled = busy
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { self.resetting = false }
+    }
     func releaseTouchControls() {
         webView?.evaluateJavaScript("window.BoundaryControls?.reset()", completionHandler: nil)
     }
@@ -134,6 +148,11 @@ struct PavilionView: View {
                         }.disabled(model.busy).buttonStyle(.bordered)
                         Button { model.open("saves.html") } label: { Label("Saved progress", systemImage: "externaldrive").frame(maxWidth: .infinity) }
                             .buttonStyle(.bordered).disabled(model.baseURL == nil || model.busy)
+                        if model.showingWeb || model.running || model.launching || model.resetting {
+                            Button { model.stopRuntime() } label: {
+                                Label("Stop runtime", systemImage: "stop.circle").frame(maxWidth: .infinity).padding(5)
+                            }.buttonStyle(.bordered).tint(.red)
+                        }
                         Text("Select the folder containing bundle.json, Runtime and Game in Files.").font(.caption2).foregroundStyle(.secondary)
                         Button { model.open("probe.html") } label: {
                             Label("Check this device", systemImage: "checkmark.shield").frame(maxWidth: .infinity).padding(5)
